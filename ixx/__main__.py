@@ -281,14 +281,8 @@ def main() -> None:
 
     # --- ixx demo ---
     if cmd == "demo":
-        import importlib.resources
-        try:
-            ref = importlib.resources.files("ixx.assets").joinpath("try-it.ixx")
-            with importlib.resources.as_file(ref) as p:
-                _run_file(str(p))
-        except (FileNotFoundError, ModuleNotFoundError, TypeError) as e:
-            print(f"ixx: demo file not found: {e}", file=sys.stderr)
-            sys.exit(1)
+        from .shell.commands.demo_walk import handle_demo_walk
+        handle_demo_walk([])
         return
 
     # --- ixx setup ---
