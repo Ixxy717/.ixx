@@ -33,6 +33,8 @@ _DASH_LINE = re.compile(r'^(-+)\s*(.*)', re.DOTALL)
 
 def preprocess(source: str) -> str:
     """Convert dash-prefixed lines to space-indented lines and strip blank lines."""
+    # Strip UTF-8 BOM (EF BB BF / U+FEFF) that some editors prepend to files.
+    source = source.lstrip('\ufeff')
     lines = source.split('\n')
     out = []
     for line in lines:

@@ -583,5 +583,144 @@ class TestBugfixes(unittest.TestCase):
         self.assertIn("inner", buf_err.getvalue())
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# v0.4 regression — keyword-as-identifier-prefix bug (return_list, etc.)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestKeywordIdentifierRegression(unittest.TestCase):
+    """Functions whose names start with a keyword must parse and run correctly."""
+
+    def test_return_literal(self):
+        src = (
+            "function simple\n"
+            "- return 81\n"
+            "\n"
+            "value = simple()\n"
+            "say value\n"
+        )
+        self.assertEqual(run(src), "81")
+
+    def test_return_variable(self):
+        src = (
+            "function identity x\n"
+            "- return x\n"
+            "\n"
+            "value = identity(42)\n"
+            "say value\n"
+        )
+        self.assertEqual(run(src), "42")
+
+    def test_return_arithmetic(self):
+        src = (
+            "function math x\n"
+            "- y = x + 1\n"
+            "- return y * 2\n"
+            "\n"
+            "value = math(5)\n"
+            "say value\n"
+        )
+        self.assertEqual(run(src), "12")
+
+    def test_return_function_call(self):
+        src = (
+            "function nested_call x\n"
+            "- return add(x, 5)\n"
+            "\n"
+            "function add a, b\n"
+            "- return a + b\n"
+            "\n"
+            "value = nested_call(10)\n"
+            "say value\n"
+        )
+        self.assertEqual(run(src), "15")
+
+    def test_two_functions_back_to_back_with_return(self):
+        src = (
+            "function one\n"
+            "- return 1\n"
+            "\n"
+            "function two\n"
+            "- return 2\n"
+            "\n"
+            "say one()\n"
+            "say two()\n"
+        )
+        self.assertEqual(lines(src), ["1", "2"])
+
+    def test_function_named_return_list(self):
+        """Function name starting with keyword 'return' must not break lexer."""
+        src = (
+            'function return_list\n'
+            '- items = "alpha", "beta", "ixx"\n'
+            '- return items\n'
+            '\n'
+            'result = return_list()\n'
+            'say count(result)\n'
+        )
+        self.assertEqual(run(src), "3")
+
+    def test_function_named_is_valid(self):
+        """Function name starting with keyword 'is' must not break lexer."""
+        src = (
+            "function is_valid x\n"
+            "- return x more than 0\n"
+            "\n"
+            "say is_valid(5)\n"
+            "say is_valid(-1)\n"
+        )
+        self.assertEqual(lines(src), ["YES", "NO"])
+
+    def test_function_named_not_empty(self):
+        """Function name starting with keyword 'not' must not break lexer."""
+        src = (
+            "function not_empty x\n"
+            "- return x more than 0\n"
+            "\n"
+            "say not_empty(3)\n"
+        )
+        self.assertEqual(run(src), "YES")
+
+    def test_function_named_contains_check(self):
+        """Function name starting with keyword 'contains' must not break lexer."""
+        src = (
+            'function contains_check items\n'
+            '- if items contains "x"\n'
+            '-- return YES\n'
+            '- return NO\n'
+            '\n'
+            'langs = "a", "x", "b"\n'
+            'say contains_check(langs)\n'
+        )
+        self.assertEqual(run(src), "YES")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v0.4 regression — UTF-8 BOM at start of source
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestBOMHandling(unittest.TestCase):
+    """UTF-8 BOM (U+FEFF / EF BB BF) must be silently stripped."""
+
+    def test_bom_say_hello(self):
+        """Source beginning with BOM runs correctly."""
+        src = '\ufeffsay "Hello"'
+        self.assertEqual(run(src), "Hello")
+
+    def test_bom_with_variable(self):
+        """BOM before assignment and say still works."""
+        src = '\ufeffx = 42\nsay x'
+        self.assertEqual(run(src), "42")
+
+    def test_bom_with_function(self):
+        """BOM before a function definition parses and runs correctly."""
+        src = (
+            '\ufefffunction greet name\n'
+            '- say "Hi {name}"\n'
+            '\n'
+            'greet "World"\n'
+        )
+        self.assertEqual(run(src), "Hi World")
+
+
 if __name__ == "__main__":
     unittest.main()

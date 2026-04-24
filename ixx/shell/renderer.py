@@ -50,11 +50,13 @@ def _enable_ansi() -> bool:
             import ctypes
             import ctypes.wintypes
             kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
-            handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
             mode = ctypes.wintypes.DWORD()
-            kernel32.GetConsoleMode(handle, ctypes.byref(mode))
-            # ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
-            kernel32.SetConsoleMode(handle, mode.value | 0x0004)
+            # Enable VTP for both stdout (-11) and stderr (-12) so that
+            # show_error() (which writes to stderr) also renders ANSI codes.
+            for std_handle in (-11, -12):
+                handle = kernel32.GetStdHandle(std_handle)
+                if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+                    kernel32.SetConsoleMode(handle, mode.value | 0x0004)
             return True
         except Exception:
             return False

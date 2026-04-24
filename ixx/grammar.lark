@@ -81,9 +81,12 @@ block: _INDENT statement+ _DEDENT
 
 // ─── terminals ───────────────────────────────────────────────────────────────
 
-// Language keywords — priority 2 beats IDENTIFIER (priority 0)
-_FUNCTION_KW.2: "function"
-_RETURN_KW.2:   "return"
+// Language keywords — priority 2 beats IDENTIFIER (priority 0).
+// Negative lookahead (?![A-Za-z0-9_]) ensures they only match as complete
+// words, never as prefixes of longer identifiers like "return_list" or
+// "function_name".  Same pattern as YES/NO below.
+_FUNCTION_KW.2: /function(?![A-Za-z0-9_])/
+_RETURN_KW.2:   /return(?![A-Za-z0-9_])/
 
 // YES / NO are case-insensitive boolean literals.
 // Negative lookahead ensures they don't match as prefixes of identifiers
@@ -91,19 +94,19 @@ _RETURN_KW.2:   "return"
 YES.1:      /[Yy][Ee][Ss](?![A-Za-z0-9_])/
 NO.1:       /[Nn][Oo](?![A-Za-z0-9_])/
 
-// Comparison keyword terminals.
-// Underscore prefix = Lark drops them from the parse tree, so transformer
-// methods only receive the expression children, not the keyword tokens.
-// Priority .1 ensures they beat IDENTIFIER.
-_IS.1:       "is"
-_NOT_KW.1:   "not"
-_LESS.1:     "less"
-_MORE.1:     "more"
-_THAN_KW.1:  "than"
-_AT.1:       "at"
-_LEAST_KW.1: "least"
-_MOST_KW.1:  "most"
-_CONTAINS.1: "contains"
+// Comparison keyword terminals — same negative-lookahead treatment so that
+// identifiers like "is_valid", "not_found", "contains_key", "at_most" etc.
+// are never incorrectly split into keyword + suffix.
+// Underscore prefix = Lark drops them from the parse tree.
+_IS.1:       /is(?![A-Za-z0-9_])/
+_NOT_KW.1:   /not(?![A-Za-z0-9_])/
+_LESS.1:     /less(?![A-Za-z0-9_])/
+_MORE.1:     /more(?![A-Za-z0-9_])/
+_THAN_KW.1:  /than(?![A-Za-z0-9_])/
+_AT.1:       /at(?![A-Za-z0-9_])/
+_LEAST_KW.1: /least(?![A-Za-z0-9_])/
+_MOST_KW.1:  /most(?![A-Za-z0-9_])/
+_CONTAINS.1: /contains(?![A-Za-z0-9_])/
 
 PLUS:  "+"
 MINUS: "-"
