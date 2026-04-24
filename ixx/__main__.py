@@ -36,6 +36,9 @@ Usage:
   ixx demo                run the built-in demo script
   ixx demo interactive    run the step-by-step interactive walkthrough
 
+Inside the ixx shell:
+  update                  update ixx to the latest version (pip install --upgrade ixx)
+
 Language quick-reference:
   say "Hello World"
 

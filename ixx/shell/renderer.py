@@ -263,7 +263,26 @@ def _supports_unicode() -> bool:
 def show_banner(version: str) -> None:
     """Print the IXX Shell startup banner.  Called only for interactive shell startup."""
     w = _BANNER_WIDTH
-    if _supports_unicode():
+    if _enable_ansi():
+        ixx_colored = f"\033[1m\033[36mIXX\033[0m"   # bold cyan "IXX"
+        # ANSI codes add invisible bytes; pad the visible text manually
+        title_visible   = f" IXX Shell {version}"
+        title_ansi      = f" {ixx_colored} Shell {version}"
+        tagline_visible = f" {_BANNER_SLOGAN}"
+        tagline_ansi    = f" {_BANNER_SLOGAN}"
+        pad_title   = w - len(title_visible)
+        pad_tagline = w - len(tagline_visible)
+        if _supports_unicode():
+            print(f"\n┌{'─' * w}┐")
+            print(f"│{title_ansi}{' ' * pad_title}│")
+            print(f"│{tagline_ansi}{' ' * pad_tagline}│")
+            print(f"└{'─' * w}┘")
+        else:
+            print(f"\n+{'-' * w}+")
+            print(f"|{title_ansi}{' ' * pad_title}|")
+            print(f"|{tagline_ansi}{' ' * pad_tagline}|")
+            print(f"+{'-' * w}+")
+    elif _supports_unicode():
         title   = f" IXX Shell {version}"
         tagline = f" {_BANNER_SLOGAN}"
         print(f"\n┌{'─' * w}┐")

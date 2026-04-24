@@ -102,6 +102,26 @@ def _normalize(tokens: list[str]) -> list[str]:
 # Meta-command helpers
 # ---------------------------------------------------------------------------
 
+def _handle_update() -> None:
+    """Handle the 'update' meta-command: run pip install --upgrade ixx."""
+    import subprocess
+    from .renderer import show_success, show_error
+    print()
+    print("  Checking for the latest IXX version...\n")
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--upgrade", "ixx"],
+            capture_output=False,
+        )
+        if result.returncode == 0:
+            show_success("Update complete. Restart ixx to use the new version.")
+        else:
+            show_error("pip exited with an error. Try: pip install --upgrade ixx")
+    except Exception as exc:
+        show_error(f"Could not run pip: {exc}")
+    print()
+
+
 def _handle_help(registry: CommandRegistry, tokens: list[str]) -> None:
     """Handle: help  |  help <cmd>  |  ? <cmd>  |  <cmd> ?  |  <cmd> help"""
     # "help" alone
@@ -272,6 +292,11 @@ def run() -> None:
         if first in ("exit", "quit"):
             print("\nGoodbye.\n")
             break
+
+        # ---- update ----
+        if first == "update":
+            _handle_update()
+            continue
 
         # ---- help / ? ----
         if first in ("help", "?") or (len(tokens) >= 2 and tokens[-1] in ("?", "help")):
