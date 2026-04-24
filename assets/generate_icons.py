@@ -75,18 +75,31 @@ def generate() -> None:
         print(f"  Generated: {out.name}")
 
     # Generate multi-size .ico
-    ico_images = []
-    for size in ICO_SIZES:
-        ico_images.append(img.resize((size, size), Image.LANCZOS))
+    # Pillow's ICO writer uses BMP for frames <256px which flattens alpha to white.
+    # Instead, embed each frame as a raw PNG chunk so all sizes keep full RGBA transparency.
+    import io, struct
 
     ico_path = OUTPUT_DIR / "ixx-icon.ico"
-    ico_images[0].save(
-        ico_path,
-        format="ICO",
-        sizes=[(s, s) for s in ICO_SIZES],
-        append_images=ico_images[1:],
-    )
-    print(f"  Generated: {ico_path.name}  (multi-size: {ICO_SIZES})")
+    png_chunks = []
+    for size in ICO_SIZES:
+        frame = img.resize((size, size), Image.LANCZOS)
+        buf = io.BytesIO()
+        frame.save(buf, "PNG")
+        png_chunks.append(buf.getvalue())
+
+    count = len(png_chunks)
+    header = struct.pack("<HHH", 0, 1, count)
+    dir_offset = 6 + count * 16
+    entries = b""
+    data = b""
+    for size, chunk in zip(ICO_SIZES, png_chunks):
+        w = size if size < 256 else 0  # 0 means 256 in the ICO spec
+        entries += struct.pack("<BBBBHHII", w, w, 0, 0, 1, 32, len(chunk), dir_offset + len(data))
+        data += chunk
+
+    with open(ico_path, "wb") as f:
+        f.write(header + entries + data)
+    print(f"  Generated: {ico_path.name}  (multi-size PNG-embedded, full RGBA: {ICO_SIZES})")
 
     # Copy VS Code icons into extension folder for convenience
     vscode_icons = REPO_ROOT / "editor" / "vscode" / "icons"
