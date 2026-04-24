@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<NotepadPlus>
+    <UserLang name="IXX" ext="ixx" udlVersion="2.1">
+        <Settings>
+            <Global caseIgnored="no" allowFoldOfComments="no" foldCompact="yes" forcePureLC="0" decimalSeparator="0" />
+            <Prefix Keywords1="no" Keywords2="no" Keywords3="no" Keywords4="no" Keywords5="no" Keywords6="no" Keywords7="no" Keywords8="no" />
+        </Settings>
+        <KeywordLists>
+            <!-- Line comments: # to end of line -->
+            <Keywords name="Comments">01# 00EOL</Keywords>
+            <!-- Number detection -->
+            <Keywords name="Numbers, prefix1"></Keywords>
+            <Keywords name="Numbers, prefix2"></Keywords>
+            <Keywords name="Numbers, extras1">.</Keywords>
+            <Keywords name="Numbers, extras2"></Keywords>
+            <Keywords name="Numbers, suffix1"></Keywords>
+            <Keywords name="Numbers, suffix2"></Keywords>
+            <Keywords name="Numbers, Range">0-9</Keywords>
+            <!-- Operators -->
+            <Keywords name="Operators1">= + - * / ,</Keywords>
+            <Keywords name="Operators2">( )</Keywords>
+            <!-- Folding (not used by IXX — dash blocks handle structure) -->
+            <Keywords name="Folders in code1, open"></Keywords>
+            <Keywords name="Folders in code1, middle"></Keywords>
+            <Keywords name="Folders in code1, close"></Keywords>
+            <Keywords name="Folders in code2, open"></Keywords>
+            <Keywords name="Folders in code2, middle"></Keywords>
+            <Keywords name="Folders in code2, close"></Keywords>
+            <!-- Keywords1: control flow -->
+            <Keywords name="Keywords1">if else loop function return</Keywords>
+            <!-- Keywords2: built-in functions -->
+            <Keywords name="Keywords2">say count text number ask type upper lower trim replace split join round abs min max first last sort reverse color</Keywords>
+            <!-- Keywords3: logical operators -->
+            <Keywords name="Keywords3">and or not</Keywords>
+            <!-- Keywords4: comparison keywords -->
+            <Keywords name="Keywords4">is less than more at least most contains</Keywords>
+            <!-- Keywords5: booleans -->
+            <Keywords name="Keywords5">YES NO yes no</Keywords>
+            <!-- Keywords6: dash block markers -->
+            <Keywords name="Keywords6">--- --</Keywords>
+            <!-- Keywords7: null constant -->
+            <Keywords name="Keywords7">nothing</Keywords>
+            <Keywords name="Keywords8"></Keywords>
+        </KeywordLists>
+        <Styles>
+            <WordsStyle name="DEFAULT"           fgColor="333333" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <WordsStyle name="COMMENTS"          fgColor="448C27" bgColor="FFFFFF" fontName="" fontStyle="2" nesting="0" />
+            <WordsStyle name="LINE COMMENTS"     fgColor="448C27" bgColor="FFFFFF" fontName="" fontStyle="2" nesting="0" />
+            <WordsStyle name="NUMBERS"           fgColor="1750EB" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <!-- Keywords1: control flow — blue bold -->
+            <WordsStyle name="KEYWORDS1"         fgColor="0000FF" bgColor="FFFFFF" fontName="" fontStyle="1" nesting="0" />
+            <!-- Keywords2: built-ins — dark gold/olive -->
+            <WordsStyle name="KEYWORDS2"         fgColor="795E26" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <!-- Keywords3: logical — purple -->
+            <WordsStyle name="KEYWORDS3"         fgColor="AF00DB" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <!-- Keywords4: comparison — dark teal -->
+            <WordsStyle name="KEYWORDS4"         fgColor="001080" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <!-- Keywords5: booleans — dark teal bold -->
+            <WordsStyle name="KEYWORDS5"         fgColor="267F99" bgColor="FFFFFF" fontName="" fontStyle="1" nesting="0" />
+            <!-- Keywords6: dash block markers — grey bold -->
+            <WordsStyle name="KEYWORDS6"         fgColor="999999" bgColor="FFFFFF" fontName="" fontStyle="1" nesting="0" />
+            <!-- Keywords7: nothing — dark teal -->
+            <WordsStyle name="KEYWORDS7"         fgColor="267F99" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <WordsStyle name="KEYWORDS8"         fgColor="333333" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <WordsStyle name="OPERATORS"         fgColor="333333" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <WordsStyle name="FOLDER IN CODE1"   fgColor="333333" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <WordsStyle name="FOLDER IN CODE2"   fgColor="333333" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <WordsStyle name="FOLDER IN COMMENT" fgColor="448C27" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <!-- Strings: double-quoted — dark red/brown -->
+            <WordsStyle name="STRINGS"           fgColor="A31515" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <WordsStyle name="STRINGS END"       fgColor="A31515" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <WordsStyle name="DELIMITERS1"       fgColor="A31515" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <WordsStyle name="DELIMITERS2"       fgColor="333333" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <WordsStyle name="DELIMITERS3"       fgColor="333333" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <WordsStyle name="DELIMITERS4"       fgColor="333333" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <WordsStyle name="DELIMITERS5"       fgColor="333333" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <WordsStyle name="DELIMITERS6"       fgColor="333333" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <WordsStyle name="DELIMITERS7"       fgColor="333333" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+            <WordsStyle name="DELIMITERS8"       fgColor="333333" bgColor="FFFFFF" fontName="" fontStyle="0" nesting="0" />
+        </Styles>
+    </UserLang>
+</NotepadPlus>
