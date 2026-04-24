@@ -595,6 +595,45 @@ class TestCommandHandlers(unittest.TestCase):
 # CLI ixx do tests
 # ---------------------------------------------------------------------------
 
+class TestTrailingHelp(unittest.TestCase):
+    """<cmd> help should behave identically to help <cmd>."""
+
+    def _run_once(self, line: str) -> str:
+        from ixx.shell.repl import run_command_once
+        buf = io.StringIO()
+        with patch("sys.stdout", buf):
+            run_command_once(line)
+        return buf.getvalue()
+
+    def test_cmd_help_same_as_help_cmd(self) -> None:
+        out_trailing = self._run_once("cpu help")
+        out_leading  = self._run_once("help cpu")
+        self.assertEqual(out_trailing, out_leading)
+
+    def test_cpu_help_shows_subcommands(self) -> None:
+        out = self._run_once("cpu help")
+        self.assertIn("core-count", out)
+
+    def test_ip_help_shows_subcommands(self) -> None:
+        out = self._run_once("ip help")
+        self.assertIn("wifi", out)
+        self.assertIn("ethernet", out)
+
+    def test_disk_help_shows_subcommands(self) -> None:
+        out = self._run_once("disk help")
+        self.assertIn("space", out)
+        self.assertIn("health", out)
+
+    def test_folder_help_shows_size(self) -> None:
+        out = self._run_once("folder help")
+        self.assertIn("size", out)
+
+    def test_ixx_do_cpu_help(self) -> None:
+        code, out = cli("do", "cpu", "help")
+        self.assertEqual(code, 0)
+        self.assertIn("core-count", out)
+
+
 class TestReplDo(unittest.TestCase):
 
     def test_ixx_do_ip_runs(self) -> None:

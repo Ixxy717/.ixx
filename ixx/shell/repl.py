@@ -87,13 +87,14 @@ def _tokenize(line: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 def _handle_help(registry: CommandRegistry, tokens: list[str]) -> None:
-    """Handle: help  |  help <cmd>  |  ? <cmd>  |  <cmd> ?"""
+    """Handle: help  |  help <cmd>  |  ? <cmd>  |  <cmd> ?  |  <cmd> help"""
     # "help" alone
     if len(tokens) <= 1:
         show_help(registry)
         return
 
-    # "help <cmd>" or "? <cmd>"
+    # "help <cmd>" or "? <cmd>"  →  topic is second token
+    # "<cmd> ?"   or "<cmd> help" →  topic is first token
     topic = tokens[1] if tokens[0] in ("help", "?") else tokens[0]
     show_help(registry, topic)
 
@@ -156,7 +157,7 @@ def run() -> None:
             break
 
         # ---- help / ? ----
-        if first in ("help", "?") or (len(tokens) >= 2 and tokens[-1] == "?"):
+        if first in ("help", "?") or (len(tokens) >= 2 and tokens[-1] in ("?", "help")):
             _handle_help(registry, tokens)
             continue
 
@@ -200,7 +201,7 @@ def run_command_once(line: str) -> None:
     first = tokens[0].lower()
 
     # Help / ? passthrough
-    if first in ("help", "?") or (len(tokens) >= 2 and tokens[-1] == "?"):
+    if first in ("help", "?") or (len(tokens) >= 2 and tokens[-1] in ("?", "help")):
         _handle_help(registry, tokens)
         return
 
