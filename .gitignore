@@ -21,6 +21,7 @@ env/
 *.suo
 *.user
 
-# OS
-Thumbs.db
-.DS_Store
+# Temp / scratch files
+_*.txt
+_*.ixx
+_*.py
