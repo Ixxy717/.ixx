@@ -174,7 +174,11 @@ class Interpreter:
             try:
                 return _display(env.get(name))
             except IXXRuntimeError:
-                return m.group(0)   # leave {name} as-is if not defined
+                raise IXXRuntimeError(
+                    f"I don't know what '{name}' is. Did you set it yet?\n"
+                    f"  Tip: {name} = \"your value\"\n"
+                    f"  (referenced inside a string as {{{name}}})"
+                )
         return _INTERP_RE.sub(replace, text)
 
     # ── arithmetic ─────────────────────────────────────────────────────────────
@@ -222,17 +226,24 @@ class Interpreter:
                 return a == b
             case "is not":
                 return a != b
-            case "less than":
-                return a < b            # type: ignore[operator]
-            case "more than":
-                return a > b            # type: ignore[operator]
-            case "at least":
-                return a >= b           # type: ignore[operator]
-            case "at most":
-                return a <= b           # type: ignore[operator]
+            case "less than" | "more than" | "at least" | "at most":
+                if isinstance(a, bool) or isinstance(b, bool):
+                    raise IXXRuntimeError(
+                        "You can't use number comparisons on YES/NO values.\n"
+                        "  Use 'is' or 'is not' to compare booleans."
+                    )
+                match op:
+                    case "less than": return a < b   # type: ignore[operator]
+                    case "more than": return a > b   # type: ignore[operator]
+                    case "at least":  return a >= b  # type: ignore[operator]
+                    case "at most":   return a <= b  # type: ignore[operator]
             case "contains":
                 if isinstance(a, list):
-                    return b in a
+                    if b in a:
+                        return True
+                    # Coerce: match by string representation so "2" matches 2
+                    b_str = _display(b)
+                    return any(_display(item) == b_str for item in a)
                 if isinstance(a, str):
                     return str(b) in a
                 raise IXXRuntimeError(

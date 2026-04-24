@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ixx"
-version = "0.3.7"
+version = "0.3.8"
 description = "IXX — executable checklist-style code"
 readme = "README.md"
 license = { text = "MIT" }

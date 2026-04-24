@@ -174,9 +174,28 @@ def _format_syntax_error(path: str, source: str, e: Exception) -> None:
     print(f"ixx: syntax error in {path} {loc}\n", file=sys.stderr)
 
     if orig_line is not None:
+        # Special case: blank line caused the error
+        if orig_line.strip() == "":
+            print(f"  (blank line)", file=sys.stderr)
+            print(f"\n  Hint: blank lines inside dash-blocks confuse the parser.", file=sys.stderr)
+            print(f"  Remove blank lines from inside if/loop/else blocks.", file=sys.stderr)
+            print(file=sys.stderr)
+            return
+
         print(f"  {orig_line}", file=sys.stderr)
         if col is not None and col >= 1:
             print(f"  {' ' * (col - 1)}^", file=sys.stderr)
+
+        # Special case: else at wrong dash level (e.g. "-- else" when "- if" was used)
+        if re.match(r'^--+\s*else', orig_line):
+            print(
+                f"\n  Hint: 'else' must use the same dash level as its 'if', not deeper.\n"
+                f"  Wrong:  - if ...  /  -- else\n"
+                f"  Right:  - if ...  /  - else",
+                file=sys.stderr
+            )
+            print(file=sys.stderr)
+            return
     else:
         # No source line available — try get_context as a fallback
         try:
