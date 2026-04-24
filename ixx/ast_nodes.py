@@ -32,6 +32,11 @@ class BoolLit:
     value: bool
 
 @dataclass
+class NothingLit:
+    """The literal `nothing` — IXX null value."""
+    pass
+
+@dataclass
 class ListLit:
     items: list["Expr"]
 
@@ -76,7 +81,7 @@ class CallExpr:
     args: list["Expr"]
 
 Expr = (
-    IntLit | FloatLit | StrLit | BoolLit | ListLit | VarRef |
+    IntLit | FloatLit | StrLit | BoolLit | NothingLit | ListLit | VarRef |
     NegOp | BinOp | Compare | AndOp | OrOp | NotOp | CallExpr
 )
 
@@ -121,7 +126,13 @@ class FuncDef:
     params: list[str]
     body: list["Stmt"]
 
-Stmt = Assign | If | Loop | Say | CallStmt | ReturnStmt | FuncDef
+@dataclass
+class TryCatch:
+    """try / catch error handling block."""
+    try_body:   list["Stmt"]
+    catch_body: list["Stmt"] = field(default_factory=list)
+
+Stmt = Assign | If | Loop | Say | CallStmt | ReturnStmt | FuncDef | TryCatch
 
 @dataclass
 class Program:

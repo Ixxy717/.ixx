@@ -11,9 +11,9 @@ import re
 import sys
 from .ast_nodes import (
     Program, Assign, If, Loop, Say,
-    IntLit, FloatLit, StrLit, BoolLit, ListLit, VarRef,
+    IntLit, FloatLit, StrLit, BoolLit, NothingLit, ListLit, VarRef,
     NegOp, BinOp, Compare, AndOp, OrOp, NotOp,
-    CallExpr, CallStmt, ReturnStmt, FuncDef,
+    CallExpr, CallStmt, ReturnStmt, FuncDef, TryCatch,
     IXXValue, Expr, Stmt,
 )
 
@@ -276,6 +276,67 @@ def _builtin_reverse(items: IXXValue) -> list:
     return list(reversed(items))
 
 
+# -- file I/O ---
+
+def _builtin_read(path: IXXValue) -> str:
+    if not isinstance(path, str):
+        raise IXXRuntimeError(f"'read' expects a file path as text, not {_ixx_type_name(path)}.")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        raise IXXRuntimeError(f"File not found: {path}")
+    except PermissionError:
+        raise IXXRuntimeError(f"Permission denied reading: {path}")
+    except OSError as e:
+        raise IXXRuntimeError(f"Could not read '{path}': {e}")
+
+
+def _builtin_readlines(path: IXXValue) -> list:
+    if not isinstance(path, str):
+        raise IXXRuntimeError(f"'readlines' expects a file path as text, not {_ixx_type_name(path)}.")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return [line.rstrip("\n\r") for line in f.readlines()]
+    except FileNotFoundError:
+        raise IXXRuntimeError(f"File not found: {path}")
+    except PermissionError:
+        raise IXXRuntimeError(f"Permission denied reading: {path}")
+    except OSError as e:
+        raise IXXRuntimeError(f"Could not read '{path}': {e}")
+
+
+def _builtin_write(path: IXXValue, content: IXXValue) -> None:
+    if not isinstance(path, str):
+        raise IXXRuntimeError(f"'write' expects a file path as text, not {_ixx_type_name(path)}.")
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(str(content))
+    except PermissionError:
+        raise IXXRuntimeError(f"Permission denied writing: {path}")
+    except OSError as e:
+        raise IXXRuntimeError(f"Could not write '{path}': {e}")
+
+
+def _builtin_append(path: IXXValue, content: IXXValue) -> None:
+    if not isinstance(path, str):
+        raise IXXRuntimeError(f"'append' expects a file path as text, not {_ixx_type_name(path)}.")
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(str(content))
+    except PermissionError:
+        raise IXXRuntimeError(f"Permission denied writing: {path}")
+    except OSError as e:
+        raise IXXRuntimeError(f"Could not append to '{path}': {e}")
+
+
+def _builtin_exists(path: IXXValue) -> bool:
+    if not isinstance(path, str):
+        raise IXXRuntimeError(f"'exists' expects a file path as text, not {_ixx_type_name(path)}.")
+    import os as _os
+    return _os.path.exists(path)
+
+
 # -- color ---
 
 # Map of IXX color names to ANSI SGR codes
@@ -368,6 +429,12 @@ BUILT_INS: dict[str, object] = {
     "reverse": _builtin_reverse,
     # v0.5 — color
     "color":   _builtin_color,
+    # v0.6 — file I/O
+    "read":      _builtin_read,
+    "readlines": _builtin_readlines,
+    "write":     _builtin_write,
+    "append":    _builtin_append,
+    "exists":    _builtin_exists,
 }
 
 
@@ -459,6 +526,15 @@ class Interpreter:
             case FuncDef():
                 pass  # already collected during the first pass in run()
 
+            case TryCatch(try_body=try_body, catch_body=catch_body):
+                try:
+                    self._exec_block(try_body, env.child())
+                except (IXXRuntimeError, OSError, IOError) as exc:
+                    if catch_body:
+                        catch_env = env.child()
+                        catch_env.set("error", str(exc))
+                        self._exec_block(catch_body, catch_env)
+
             case _:
                 raise IXXRuntimeError(
                     f"Unknown statement type: {type(stmt).__name__}"
@@ -471,6 +547,7 @@ class Interpreter:
             case IntLit(value=v):   return v
             case FloatLit(value=v): return v
             case BoolLit(value=v):  return v
+            case NothingLit():      return None
 
             case StrLit(value=v):
                 return self._interpolate(v, env)

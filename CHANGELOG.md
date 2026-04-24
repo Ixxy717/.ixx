@@ -4,6 +4,38 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.0] — File I/O and error handling
+
+### Added
+
+**File I/O built-ins**
+- `read(path)` — read the full contents of a file as text
+- `readlines(path)` — read a file and return its lines as a list
+- `write(path, content)` — write (overwrite) text to a file
+- `append(path, content)` — append text to an existing or new file
+- `exists(path)` — check whether a file or folder exists (returns `YES`/`NO`)
+- All five raise a friendly `IXXRuntimeError` on OS failure (file not found, permission denied, etc.)
+- `write` and `append` are statement-level calls using space-separated arguments
+
+**try / catch error handling**
+- `try` / `catch` statement — runs a block and catches any `IXXRuntimeError` or OS/IO error
+- `catch` block is optional; without it, errors are swallowed silently and execution continues
+- Inside `catch`, the variable `error` is automatically set to the error message text
+- Variables pre-declared before `try` can be updated inside the block and read after it
+
+**`nothing` literal**
+- `nothing` is now a grammar keyword and can be written directly: `result = nothing`
+- Previously only producible via bare `return`; now usable as an explicit null default
+
+**Examples**
+- `examples/files.ixx` — full working demo of all five file I/O built-ins and `try`/`catch`
+
+### Documentation
+- `spec/language.md` — new `nothing`, File I/O, and try/catch sections; reserved words updated
+- `spec/roadmap.md` — v0.6 marked complete
+
+---
+
 ## [0.5.2] — color() ANSI fix on Windows CMD
 
 ### Fixed

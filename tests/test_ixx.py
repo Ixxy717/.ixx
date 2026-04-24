@@ -463,7 +463,7 @@ class TestCLI(unittest.TestCase):
     def test_version(self):
         code, out = cli("version")
         self.assertEqual(code, 0)
-        self.assertIn("0.5.", out)
+        self.assertIn("0.6.", out)
 
     def test_help_contains_usage(self):
         code, out = cli("help")

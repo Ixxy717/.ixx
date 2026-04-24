@@ -11,6 +11,7 @@ statement: assignment _NEWLINE
          | call_stmt
          | return_stmt
          | func_def
+         | try_stmt
 
 // RHS is one or more comma-separated exprs.
 // Multiple → ListLit.  Single → plain value.  Transformer handles the distinction.
@@ -33,6 +34,9 @@ return_stmt: _RETURN_KW (expr)? _NEWLINE
 
 // Function definition
 func_def: _FUNCTION_KW IDENTIFIER func_params? _NEWLINE block
+
+// try / catch error handling
+try_stmt: _TRY_KW _NEWLINE block (_CATCH_KW _NEWLINE block)?
 
 // Comma-separated parameter names
 func_params: IDENTIFIER ("," IDENTIFIER)*
@@ -76,6 +80,7 @@ block: _INDENT statement+ _DEDENT
         | ESCAPED_STRING              -> str_lit
         | YES                         -> yes_lit
         | NO                          -> no_lit
+        | NOTHING                     -> nothing_lit
         | IDENTIFIER "(" (expr ("," expr)*)? ")"  -> call_expr
         | IDENTIFIER                  -> var_ref
 
@@ -87,12 +92,15 @@ block: _INDENT statement+ _DEDENT
 // "function_name".  Same pattern as YES/NO below.
 _FUNCTION_KW.2: /function(?![A-Za-z0-9_])/
 _RETURN_KW.2:   /return(?![A-Za-z0-9_])/
+_TRY_KW.2:      /try(?![A-Za-z0-9_])/
+_CATCH_KW.2:    /catch(?![A-Za-z0-9_])/
 
 // YES / NO are case-insensitive boolean literals.
 // Negative lookahead ensures they don't match as prefixes of identifiers
 // (e.g. "noop" must not be lexed as NO + "op").
 YES.1:      /[Yy][Ee][Ss](?![A-Za-z0-9_])/
 NO.1:       /[Nn][Oo](?![A-Za-z0-9_])/
+NOTHING.2:  /nothing(?![A-Za-z0-9_])/
 
 // Comparison keyword terminals — same negative-lookahead treatment so that
 // identifiers like "is_valid", "not_found", "contains_key", "at_most" etc.

@@ -10,9 +10,9 @@ from __future__ import annotations
 from lark import Transformer
 from .ast_nodes import (
     Program, Assign, If, Loop, Say,
-    IntLit, FloatLit, StrLit, BoolLit, ListLit, VarRef,
+    IntLit, FloatLit, StrLit, BoolLit, NothingLit, ListLit, VarRef,
     NegOp, BinOp, Compare, AndOp, OrOp, NotOp,
-    CallExpr, CallStmt, ReturnStmt, FuncDef,
+    CallExpr, CallStmt, ReturnStmt, FuncDef, TryCatch,
 )
 
 
@@ -71,6 +71,11 @@ class IXXTransformer(Transformer):
     def func_params(self, items):
         return [str(t) for t in items]
 
+    def try_stmt(self, items):
+        try_body   = items[0]
+        catch_body = items[1] if len(items) > 1 else []
+        return TryCatch(try_body=try_body, catch_body=catch_body)
+
     def block(self, items):
         return [s for s in items if s is not None]
 
@@ -98,6 +103,9 @@ class IXXTransformer(Transformer):
 
     def no_lit(self, _):
         return BoolLit(value=False)
+
+    def nothing_lit(self, _):
+        return NothingLit()
 
     def var_ref(self, items):
         return VarRef(name=str(items[0]))

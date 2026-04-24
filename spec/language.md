@@ -269,7 +269,7 @@ Variables created for the first time inside a block stay in that block.
 
 These words cannot be used as variable names:
 
-`if`, `else`, `loop`, `say`, `and`, `or`, `not`, `is`, `less`, `more`, `than`, `at`, `least`, `most`, `contains`, `YES`, `NO`, `function`, `return`
+`if`, `else`, `loop`, `say`, `and`, `or`, `not`, `is`, `less`, `more`, `than`, `at`, `least`, `most`, `contains`, `YES`, `NO`, `nothing`, `function`, `return`, `try`, `catch`
 
 ---
 
@@ -435,6 +435,115 @@ say color("green", "All good")
 say color("red", "Something went wrong")
 say color("yellow", "Warning: check your input")
 say color("bold", "Done.")
+```
+
+---
+
+## nothing
+
+`nothing` is the IXX null value. It is returned by functions that do not explicitly return a value, and can be used as a default before a `try` block.
+
+```
+status = nothing
+say type(status)   # nothing
+
+function empty
+- return
+
+r = empty()
+say type(r)        # nothing
+```
+
+---
+
+## File I/O built-ins (v0.6)
+
+Read and write files using the built-in functions below. Paths are relative to the current working directory unless absolute.
+
+| Name | Arguments | Returns | Description |
+|------|-----------|---------|-------------|
+| `read(path)` | text | text | Read the full contents of a file as a single string |
+| `readlines(path)` | text | list | Read a file and return its lines as a list (newlines stripped) |
+| `write(path, content)` | text, text | nothing | Write (overwrite) text to a file |
+| `append(path, content)` | text, text | nothing | Append text to the end of a file |
+| `exists(path)` | text | YES/NO | Check whether a file or folder exists |
+
+All five raise an `IXXRuntimeError` with a friendly message if the file cannot be read or written (file not found, permission denied, etc.).
+
+`write` and `append` are called as statements with space-separated arguments:
+```
+write "notes.txt", "My note"
+append "notes.txt", " More text."
+```
+
+`read`, `readlines`, and `exists` are typically used in expression position:
+```
+content = read("notes.txt")
+lines   = readlines("notes.txt")
+
+if exists("config.txt")
+- say "Config found"
+```
+
+---
+
+## try / catch (v0.6)
+
+Run a block of code and handle any error without crashing.
+
+```
+try
+- statement
+- statement
+catch
+- say "Something went wrong: {error}"
+```
+
+- The `catch` block is optional. Without it, errors are swallowed silently and execution continues.
+- Inside `catch`, the variable `error` is automatically set to the error message text.
+- `try` catches `IXXRuntimeError` and OS/IO errors (file not found, permission denied, etc.).
+- Execution always continues after the `try`/`catch` block.
+
+### Scoping
+
+Variables created for the first time inside a `try` or `catch` block stay local to that block, following the same rules as `if` and `loop` blocks.
+
+To use a value outside the block, pre-declare the variable before `try`:
+
+```
+result = nothing
+try
+- result = read("data.txt")
+catch
+- say "Read failed: {error}"
+
+if result is not nothing
+- say "Got: {result}"
+```
+
+### Examples
+
+```
+# Graceful file read
+content = nothing
+try
+- content = read("notes.txt")
+catch
+- say "Could not read notes: {error}"
+
+# Silent try -- error swallowed, execution continues
+try
+- risky = read("might-not-exist.txt")
+say "Continuing..."
+
+# Nested: try inside a function
+function load_config path
+- cfg = nothing
+- try
+-- cfg = read(path)
+-- catch
+-- say "Config missing, using defaults"
+- return cfg
 ```
 
 ---

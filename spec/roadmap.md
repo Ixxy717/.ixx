@@ -235,9 +235,17 @@ Respects `NO_COLOR` and `IXX_COLOR=0`. Plain-text fallback when color is off.
 
 ---
 
-## v0.5 — Records / objects (pending)
+## v0.6 — File I/O + try/catch (completed)
 
-Structured named fields on a value. Syntax TBD.
+**File I/O built-ins:** `read`, `readlines`, `write`, `append`, `exists`
+
+**Error handling:** `try`/`catch` statement — catches `IXXRuntimeError` and OS/IO errors. Optional `catch` block receives the error message in the `error` variable.
+
+**`nothing` literal:** Added as a grammar keyword so users can write `result = nothing` as a default value before a `try` block.
+
+---
+
+## v0.5 — Records / objects (pending)Structured named fields on a value. Syntax TBD.
 
 ---
 

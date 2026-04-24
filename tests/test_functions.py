@@ -923,5 +923,202 @@ class TestBuiltinColor(unittest.TestCase):
                 os.environ["NO_COLOR"] = old
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestBareVariableAssignment(unittest.TestCase):
+    """Regression suite for bare variable assignment (a = b).
+    These all work correctly — tests lock in the behaviour."""
+
+    def test_global_bare_var_assign(self):
+        self.assertEqual(run("x = 5\ny = x\nsay y"), "5")
+
+    def test_assign_from_parameter(self):
+        src = """
+function test value
+- copy = value
+- return copy
+
+say test(42)
+"""
+        self.assertEqual(run(src), "42")
+
+    def test_assign_from_local_var(self):
+        src = """
+function f
+- a = 1
+- b = a
+- return b
+
+say f()
+"""
+        self.assertEqual(run(src), "1")
+
+    def test_assign_inside_loop_in_function(self):
+        src = """
+function loopcopy
+- a = 1
+- b = 2
+- loop b more than 0
+-- a = b
+-- b = b - 1
+- return a
+
+say loopcopy()
+"""
+        self.assertEqual(run(src), "1")
+
+    def test_iterative_fib(self):
+        """Iterative Fibonacci -- the exact case the user reported."""
+        src = """
+function fib n
+- a = 0
+- b = 1
+- loop n more than 1
+-- temp = a + b
+-- a = b
+-- b = temp
+-- n = n - 1
+- return b
+
+say fib(7)
+"""
+        self.assertEqual(run(src), "13")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestNothingLiteral(unittest.TestCase):
+
+    def test_nothing_type(self):
+        self.assertEqual(run("x = nothing\nsay type(x)"), "nothing")
+
+    def test_nothing_is_falsy(self):
+        self.assertEqual(run('x = nothing\nif x\n- say "yes"\nelse\n- say "no"'), "no")
+
+    def test_nothing_display(self):
+        self.assertEqual(run("x = nothing\nsay x"), "nothing")
+
+    def test_nothing_is_not_nothing(self):
+        self.assertEqual(run('x = nothing\nif x is not nothing\n- say "yes"\nelse\n- say "no"'), "no")
+
+    def test_assign_nothing_then_update(self):
+        self.assertEqual(run("x = nothing\nx = 42\nsay x"), "42")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestFileIO(unittest.TestCase):
+
+    def setUp(self):
+        import tempfile, os
+        self._tmpdir = tempfile.mkdtemp()
+        self._tmp = os.path.join(self._tmpdir, "ixx_test.txt").replace("\\", "/")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self._tmpdir, ignore_errors=True)
+
+    def test_write_and_read(self):
+        src = f'write "{self._tmp}", "hello ixx"\ncontent = read("{self._tmp}")\nsay content'
+        self.assertEqual(run(src), "hello ixx")
+
+    def test_append(self):
+        src = f'write "{self._tmp}", "hello"\nappend "{self._tmp}", " world"\ncontent = read("{self._tmp}")\nsay content'
+        self.assertEqual(run(src), "hello world")
+
+    def test_readlines_single_line(self):
+        src = f'write "{self._tmp}", "one line"\nlines = readlines("{self._tmp}")\nsay count(lines)'
+        self.assertEqual(run(src), "1")
+
+    def test_exists_true(self):
+        src = f'write "{self._tmp}", "x"\nsay exists("{self._tmp}")'
+        self.assertEqual(run(src), "YES")
+
+    def test_exists_false(self):
+        path = self._tmp + "_missing.txt"
+        self.assertEqual(run(f'say exists("{path}")'), "NO")
+
+    def test_read_missing_raises(self):
+        path = self._tmp + "_missing.txt"
+        err = run_err(f'content = read("{path}")')
+        self.assertIn("not found", err.lower())
+
+    def test_write_bad_path_type_raises(self):
+        err = run_err('write 99, "content"')
+        self.assertIn("write", err.lower())
+
+    def test_read_bad_path_type_raises(self):
+        err = run_err("content = read(42)")
+        self.assertIn("read", err.lower())
+
+    def test_exists_bad_path_type_raises(self):
+        err = run_err("say exists(42)")
+        self.assertIn("exists", err.lower())
+
+    def test_append_creates_file(self):
+        """append creates the file if it does not exist."""
+        path = self._tmp + "_new.txt"
+        src = f'append "{path}", "created"\ncontent = read("{path}")\nsay content'
+        self.assertEqual(run(src), "created")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestTryCatch(unittest.TestCase):
+
+    def test_catch_receives_error_variable(self):
+        src = 'try\n- x = number("abc")\ncatch\n- say error'
+        out = run(src)
+        self.assertIn("abc", out)
+
+    def test_no_error_catch_not_executed(self):
+        src = 'try\n- x = 1\ncatch\n- say "should not print"'
+        self.assertEqual(run(src), "")
+
+    def test_try_without_catch_swallows_error(self):
+        src = 'try\n- x = number("abc")\nsay "after"'
+        self.assertEqual(run(src), "after")
+
+    def test_execution_continues_after_catch(self):
+        src = 'try\n- x = number("abc")\ncatch\n- say "caught"\nsay "done"'
+        self.assertEqual(run(src), "caught\ndone")
+
+    def test_execution_continues_after_silent_try(self):
+        src = 'try\n- x = number("abc")\nsay "done"'
+        self.assertEqual(run(src), "done")
+
+    def test_predeclared_var_updated_in_try(self):
+        src = 'result = 0\ntry\n- result = 42\ncatch\n- say "error"\nsay result'
+        self.assertEqual(run(src), "42")
+
+    def test_predeclared_nothing_updated_in_try(self):
+        src = 'result = nothing\ntry\n- result = 42\ncatch\n- say "error"\nsay result'
+        self.assertEqual(run(src), "42")
+
+    def test_catch_file_not_found(self):
+        src = 'try\n- x = read("no_file_ixx_test_99.txt")\ncatch\n- say "missing"'
+        self.assertEqual(run(src), "missing")
+
+    def test_error_interpolation_in_catch(self):
+        src = 'try\n- x = number("bad")\ncatch\n- say "err: {error}"'
+        out = run(src)
+        self.assertTrue(out.startswith("err:"))
+        self.assertIn("bad", out)
+
+    def test_nested_try(self):
+        src = (
+            'outer = "ok"\n'
+            'try\n'
+            '- try\n'
+            '-- x = number("abc")\n'
+            '- catch\n'
+            '-- outer = "inner caught"\n'
+            'say outer'
+        )
+        self.assertEqual(run(src), "inner caught")
+
+
+if __name__ == "__main__":
+    unittest.main()
 if __name__ == "__main__":
     unittest.main()
