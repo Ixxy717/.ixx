@@ -4,6 +4,45 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.5.0] — Extended built-in library
+
+### Added
+
+**Text built-ins**
+- `upper(x)` — convert to uppercase
+- `lower(x)` — convert to lowercase
+- `trim(x)` — strip spaces from both ends
+- `replace(x, find, with)` — replace all occurrences
+- `split(x)` — split on whitespace; `split(x, sep)` splits on a separator
+- `join(items)` — join a list with `", "`; `join(items, sep)` uses a custom separator
+
+**Math built-ins**
+- `round(x)` — round to nearest whole number; `round(x, digits)` for decimal places
+- `abs(x)` — absolute value
+- `min(a, b)` / `min(list)` — smallest value
+- `max(a, b)` / `max(list)` — largest value
+
+**List built-ins**
+- `first(items)` — first item; returns `nothing` if empty
+- `last(items)` — last item; returns `nothing` if empty
+- `sort(items)` — sorted copy
+- `reverse(items)` — reversed copy (does not modify the original)
+
+**Color output**
+- `color(name, text)` — wrap text in a terminal color for use with `say`
+- Available colors: `red`, `green`, `yellow`, `cyan`, `bold`, `dim`
+- Respects `NO_COLOR` and `IXX_COLOR=0`; falls back to plain text when color is off
+
+**Examples**
+- `examples/stdlib.ixx` — a natural-language demo of all new built-ins
+
+### Documentation
+- `spec/language.md` — new v0.5 built-ins tables added
+- `spec/roadmap.md` — v0.5 extended built-in library marked complete
+- Editor grammar files updated: all new built-in names highlighted in VS Code and Notepad++
+
+---
+
 ## [0.4.3] — gpu temp, disk health, disk smart, update check
 
 ### Added

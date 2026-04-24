@@ -142,12 +142,211 @@ def _builtin_ask(prompt: IXXValue = "") -> str:
     return input(str(prompt))
 
 
+# ── v0.5 built-ins ─────────────────────────────────────────────────────────────
+
+# -- text ---
+
+def _builtin_upper(x: IXXValue) -> str:
+    if not isinstance(x, str):
+        raise IXXRuntimeError(f"'upper' works on text, not {_ixx_type_name(x)}.")
+    return x.upper()
+
+
+def _builtin_lower(x: IXXValue) -> str:
+    if not isinstance(x, str):
+        raise IXXRuntimeError(f"'lower' works on text, not {_ixx_type_name(x)}.")
+    return x.lower()
+
+
+def _builtin_trim(x: IXXValue) -> str:
+    if not isinstance(x, str):
+        raise IXXRuntimeError(f"'trim' works on text, not {_ixx_type_name(x)}.")
+    return x.strip()
+
+
+def _builtin_replace(x: IXXValue, find: IXXValue, replacement: IXXValue) -> str:
+    if not isinstance(x, str):
+        raise IXXRuntimeError(f"'replace' works on text, not {_ixx_type_name(x)}.")
+    if not isinstance(find, str):
+        raise IXXRuntimeError(
+            f"'replace' second argument (find) must be text, not {_ixx_type_name(find)}."
+        )
+    return x.replace(str(find), str(replacement))
+
+
+def _builtin_split(x: IXXValue, sep: IXXValue = None) -> list:  # type: ignore[assignment]
+    if not isinstance(x, str):
+        raise IXXRuntimeError(f"'split' works on text, not {_ixx_type_name(x)}.")
+    if sep is None:
+        return x.split()
+    if not isinstance(sep, str):
+        raise IXXRuntimeError(
+            f"'split' separator must be text, not {_ixx_type_name(sep)}."
+        )
+    return x.split(sep)
+
+
+def _builtin_join(items: IXXValue, sep: IXXValue = ", ") -> str:
+    if not isinstance(items, list):
+        raise IXXRuntimeError(f"'join' works on lists, not {_ixx_type_name(items)}.")
+    if not isinstance(sep, str):
+        raise IXXRuntimeError(
+            f"'join' separator must be text, not {_ixx_type_name(sep)}."
+        )
+    return sep.join(str(item) for item in items)
+
+
+# -- math ---
+
+def _builtin_round(x: IXXValue, digits: IXXValue = 0) -> int | float:
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
+        raise IXXRuntimeError(f"'round' works on numbers, not {_ixx_type_name(x)}.")
+    try:
+        d = int(digits)
+    except (TypeError, ValueError):
+        raise IXXRuntimeError("'round' second argument (digits) must be a whole number.")
+    result = round(x, d)
+    return int(result) if d <= 0 else result
+
+
+def _builtin_abs(x: IXXValue) -> int | float:
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
+        raise IXXRuntimeError(f"'abs' works on numbers, not {_ixx_type_name(x)}.")
+    return abs(x)
+
+
+def _builtin_min(*args: IXXValue) -> IXXValue:
+    if len(args) == 1 and isinstance(args[0], list):
+        items = args[0]
+        if not items:
+            raise IXXRuntimeError("'min' cannot find the minimum of an empty list.")
+        return min(items)  # type: ignore[type-var]
+    if len(args) < 2:
+        raise IXXRuntimeError(
+            "'min' needs at least two values, or a list.  Example: min(3, 7)"
+        )
+    return min(args)  # type: ignore[type-var]
+
+
+def _builtin_max(*args: IXXValue) -> IXXValue:
+    if len(args) == 1 and isinstance(args[0], list):
+        items = args[0]
+        if not items:
+            raise IXXRuntimeError("'max' cannot find the maximum of an empty list.")
+        return max(items)  # type: ignore[type-var]
+    if len(args) < 2:
+        raise IXXRuntimeError(
+            "'max' needs at least two values, or a list.  Example: max(3, 7)"
+        )
+    return max(args)  # type: ignore[type-var]
+
+
+# -- lists ---
+
+def _builtin_first(items: IXXValue) -> IXXValue:
+    if not isinstance(items, list):
+        raise IXXRuntimeError(f"'first' works on lists, not {_ixx_type_name(items)}.")
+    if not items:
+        return None
+    return items[0]
+
+
+def _builtin_last(items: IXXValue) -> IXXValue:
+    if not isinstance(items, list):
+        raise IXXRuntimeError(f"'last' works on lists, not {_ixx_type_name(items)}.")
+    if not items:
+        return None
+    return items[-1]
+
+
+def _builtin_sort(items: IXXValue) -> list:
+    if not isinstance(items, list):
+        raise IXXRuntimeError(f"'sort' works on lists, not {_ixx_type_name(items)}.")
+    try:
+        return sorted(items)  # type: ignore[type-var]
+    except TypeError:
+        raise IXXRuntimeError(
+            "'sort' cannot sort a list that mixes text and numbers."
+        )
+
+
+def _builtin_reverse(items: IXXValue) -> list:
+    if not isinstance(items, list):
+        raise IXXRuntimeError(f"'reverse' works on lists, not {_ixx_type_name(items)}.")
+    return list(reversed(items))
+
+
+# -- color ---
+
+# Map of IXX color names to ANSI SGR codes
+_COLOR_CODES: dict[str, str] = {
+    "red":    "\033[31m",
+    "green":  "\033[32m",
+    "yellow": "\033[33m",
+    "cyan":   "\033[36m",
+    "bold":   "\033[1m",
+    "dim":    "\033[2m",
+}
+_COLOR_RESET = "\033[0m"
+
+
+def _ansi_enabled() -> bool:
+    """Return True if ANSI is currently enabled (checks env vars, tty)."""
+    import os, sys
+    if os.environ.get("NO_COLOR", ""):
+        return False
+    ixx_color = os.environ.get("IXX_COLOR", "")
+    if ixx_color == "0":
+        return False
+    if ixx_color == "1":
+        return True
+    return sys.stdout.isatty()
+
+
+def _builtin_color(color_name: IXXValue, text_val: IXXValue) -> str:
+    if not isinstance(color_name, str):
+        raise IXXRuntimeError(
+            f"'color' first argument must be a color name (text), "
+            f"not {_ixx_type_name(color_name)}."
+        )
+    name = color_name.lower().strip()
+    if name not in _COLOR_CODES:
+        valid = ", ".join(sorted(_COLOR_CODES))
+        raise IXXRuntimeError(
+            f"Unknown color '{color_name}'.  Valid colors: {valid}."
+        )
+    text_str = str(text_val) if text_val is not None else ""
+    if not _ansi_enabled():
+        return text_str
+    return f"{_COLOR_CODES[name]}{text_str}{_COLOR_RESET}"
+
+
 BUILT_INS: dict[str, object] = {
-    "count":  _builtin_count,
-    "text":   _builtin_text,
-    "number": _builtin_number,
-    "type":   _builtin_type,
-    "ask":    _builtin_ask,
+    # v0.4
+    "count":   _builtin_count,
+    "text":    _builtin_text,
+    "number":  _builtin_number,
+    "type":    _builtin_type,
+    "ask":     _builtin_ask,
+    # v0.5 — text
+    "upper":   _builtin_upper,
+    "lower":   _builtin_lower,
+    "trim":    _builtin_trim,
+    "replace": _builtin_replace,
+    "split":   _builtin_split,
+    "join":    _builtin_join,
+    # v0.5 — math
+    "round":   _builtin_round,
+    "abs":     _builtin_abs,
+    "min":     _builtin_min,
+    "max":     _builtin_max,
+    # v0.5 — lists
+    "first":   _builtin_first,
+    "last":    _builtin_last,
+    "sort":    _builtin_sort,
+    "reverse": _builtin_reverse,
+    # v0.5 — color
+    "color":   _builtin_color,
 }
 
 

@@ -222,29 +222,16 @@ say result
 
 ---
 
-## v0.5 — Extended built-in library (pending)
+## v0.5 — Extended built-in library (completed)
 
-The following built-ins are planned for v0.5. They are intentionally deferred from v0.4:
+**Text:** `upper`, `lower`, `trim`, `replace`, `split`, `join`
 
-**Text:** `upper`, `lower`, `trim`, `length`, `split`, `join`, `replace`
+**Math:** `round`, `abs`, `min`, `max`
 
-**Math:** `round`, `floor`, `ceil`, `abs`, `min`, `max`, `sqrt`, `power`
+**Lists:** `first`, `last`, `sort`, `reverse`
 
-**Lists:** `first`, `last`, `sort`, `reverse`, `unique`
-
-**Color output:** `color(name, text)` — wrap a string in ANSI color for `say` output.
-
-Available color names: `red`, `green`, `yellow`, `cyan`, `bold`, `dim`.
-Respects `NO_COLOR` and `IXX_COLOR=0` the same as the rest of the runtime.
-
-Example:
-```
-say color("yellow", "Warning: this is a test")
-say color("cyan", "Info: value is " + text(score))
-say color("bold", "Done.")
-```
-
-Plain-text fallback (no terminal / color disabled): text is returned unchanged, no ANSI codes emitted.
+**Color output:** `color(name, text)` — wraps a string in ANSI color for `say` output.
+Respects `NO_COLOR` and `IXX_COLOR=0`. Plain-text fallback when color is off.
 
 ---
 

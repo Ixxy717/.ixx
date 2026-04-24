@@ -384,6 +384,61 @@ say "Hello, {answer}"
 
 ---
 
+## Built-in functions (v0.5)
+
+### Text
+
+| Name | Arguments | Returns | Description |
+|------|-----------|---------|-------------|
+| `upper(x)` | text | text | Convert to uppercase |
+| `lower(x)` | text | text | Convert to lowercase |
+| `trim(x)` | text | text | Remove spaces from both ends |
+| `replace(x, find, with)` | text, text, text | text | Replace all occurrences of `find` with `with` |
+| `split(x)` | text | list | Split on whitespace |
+| `split(x, sep)` | text, text | list | Split on a separator |
+| `join(items)` | list | text | Join with `", "` |
+| `join(items, sep)` | list, text | text | Join with a separator |
+
+### Math
+
+| Name | Arguments | Returns | Description |
+|------|-----------|---------|-------------|
+| `round(x)` | number | number | Round to the nearest whole number |
+| `round(x, digits)` | number, number | number | Round to `digits` decimal places |
+| `abs(x)` | number | number | Absolute value (removes the minus sign) |
+| `min(a, b)` | number, number | number | The smaller of two values |
+| `min(list)` | list | any | The smallest item in a list |
+| `max(a, b)` | number, number | number | The larger of two values |
+| `max(list)` | list | any | The largest item in a list |
+
+### Lists
+
+| Name | Arguments | Returns | Description |
+|------|-----------|---------|-------------|
+| `first(items)` | list | any | First item, or `nothing` if empty |
+| `last(items)` | list | any | Last item, or `nothing` if empty |
+| `sort(items)` | list | list | Sorted copy (alphabetical or numeric) |
+| `reverse(items)` | list | list | Reversed copy |
+
+### Color output
+
+| Name | Arguments | Returns | Description |
+|------|-----------|---------|-------------|
+| `color(name, text)` | text, text | text | Wrap text in a terminal color |
+
+Available color names: `red`, `green`, `yellow`, `cyan`, `bold`, `dim`
+
+Respects `NO_COLOR` and `IXX_COLOR=0`. Falls back to plain text with no ANSI codes when color is disabled.
+
+```
+say color("green", "All good")
+say color("red", "Something went wrong")
+say color("yellow", "Warning: check your input")
+say color("bold", "Done.")
+```
+
+---
+
 ## Full example
 
 ```

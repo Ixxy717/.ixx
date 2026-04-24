@@ -724,3 +724,204 @@ class TestBOMHandling(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v0.5 built-ins — text
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestBuiltinText(unittest.TestCase):
+
+    def test_upper_basic(self):
+        self.assertEqual(run('say upper("hello")'), "HELLO")
+
+    def test_upper_already_upper(self):
+        self.assertEqual(run('say upper("WORLD")'), "WORLD")
+
+    def test_lower_basic(self):
+        self.assertEqual(run('say lower("HELLO")'), "hello")
+
+    def test_lower_mixed(self):
+        self.assertEqual(run('say lower("Hello World")'), "hello world")
+
+    def test_trim_spaces(self):
+        self.assertEqual(run('say trim("  hi  ")'), "hi")
+
+    def test_trim_no_spaces(self):
+        self.assertEqual(run('say trim("clean")'), "clean")
+
+    def test_replace_word(self):
+        self.assertEqual(
+            run('say replace("hello world", "world", "there")'), "hello there"
+        )
+
+    def test_replace_all_occurrences(self):
+        self.assertEqual(run('say replace("aaa", "a", "b")'), "bbb")
+
+    def test_replace_not_found(self):
+        self.assertEqual(run('say replace("hello", "xyz", "abc")'), "hello")
+
+    def test_split_by_comma(self):
+        self.assertEqual(
+            run('parts = split("a,b,c", ",")\nsay count(parts)'), "3"
+        )
+
+    def test_split_by_default_whitespace(self):
+        self.assertEqual(
+            run('words = split("hello world")\nsay count(words)'), "2"
+        )
+
+    def test_split_result_is_list(self):
+        self.assertEqual(
+            run('parts = split("x,y", ",")\nsay type(parts)'), "list"
+        )
+
+    def test_join_with_separator(self):
+        self.assertEqual(
+            run('items = "a", "b", "c"\nsay join(items, " - ")'), "a - b - c"
+        )
+
+    def test_join_default_separator(self):
+        self.assertEqual(run('items = "x", "y"\nsay join(items)'), "x, y")
+
+    def test_upper_type_error(self):
+        err = run_err('say upper(42)')
+        self.assertIn("upper", err)
+        self.assertIn("number", err)
+
+    def test_replace_type_error(self):
+        err = run_err('say replace(42, "x", "y")')
+        self.assertIn("replace", err)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v0.5 built-ins — math
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestBuiltinMath(unittest.TestCase):
+
+    def test_round_up(self):
+        self.assertEqual(run('say round(3.7)'), "4")
+
+    def test_round_down(self):
+        self.assertEqual(run('say round(3.2)'), "3")
+
+    def test_round_with_digits(self):
+        self.assertEqual(run('say round(3.14159, 2)'), "3.14")
+
+    def test_round_already_whole(self):
+        self.assertEqual(run('say round(5)'), "5")
+
+    def test_abs_negative(self):
+        self.assertEqual(run('say abs(-10)'), "10")
+
+    def test_abs_positive(self):
+        self.assertEqual(run('say abs(10)'), "10")
+
+    def test_abs_zero(self):
+        self.assertEqual(run('say abs(0)'), "0")
+
+    def test_min_two_values(self):
+        self.assertEqual(run('say min(3, 7)'), "3")
+
+    def test_min_list(self):
+        self.assertEqual(run('nums = 5, 2, 9, 1\nsay min(nums)'), "1")
+
+    def test_max_two_values(self):
+        self.assertEqual(run('say max(3, 7)'), "7")
+
+    def test_max_list(self):
+        self.assertEqual(run('nums = 5, 2, 9, 1\nsay max(nums)'), "9")
+
+    def test_abs_type_error(self):
+        err = run_err('say abs("text")')
+        self.assertIn("abs", err)
+
+    def test_round_type_error(self):
+        err = run_err('say round("text")')
+        self.assertIn("round", err)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v0.5 built-ins — lists
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestBuiltinLists(unittest.TestCase):
+
+    def test_first_basic(self):
+        self.assertEqual(run('items = "a", "b", "c"\nsay first(items)'), "a")
+
+    def test_last_basic(self):
+        self.assertEqual(run('items = "a", "b", "c"\nsay last(items)'), "c")
+
+    def test_first_single_item(self):
+        self.assertEqual(run('items = "only", "other"\nsay first(items)'), "only")
+
+    def test_sort_strings(self):
+        src = 'items = "banana", "apple", "cherry"\nresult = sort(items)\nsay first(result)'
+        self.assertEqual(run(src), "apple")
+
+    def test_sort_numbers(self):
+        self.assertEqual(run('nums = 5, 2, 9, 1\nresult = sort(nums)\nsay first(result)'), "1")
+
+    def test_reverse_list(self):
+        self.assertEqual(run('items = "a", "b", "c"\nrev = reverse(items)\nsay first(rev)'), "c")
+
+    def test_reverse_does_not_modify_original(self):
+        src = 'items = "a", "b", "c"\nrev = reverse(items)\nsay first(items)\n'
+        self.assertEqual(run(src), "a")
+
+    def test_sort_type_error(self):
+        err = run_err('say sort("not a list")')
+        self.assertIn("sort", err)
+
+    def test_first_type_error(self):
+        err = run_err('say first("not a list")')
+        self.assertIn("first", err)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v0.5 built-ins — color
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestBuiltinColor(unittest.TestCase):
+
+    def test_color_returns_plain_text_when_no_color(self):
+        """With NO_COLOR set, color() returns the text unchanged."""
+        import os
+        old = os.environ.get("NO_COLOR")
+        os.environ["NO_COLOR"] = "1"
+        try:
+            self.assertEqual(run('say color("red", "hello")'), "hello")
+        finally:
+            if old is None:
+                os.environ.pop("NO_COLOR", None)
+            else:
+                os.environ["NO_COLOR"] = old
+
+    def test_color_unknown_name_raises(self):
+        err = run_err('say color("purple", "hi")')
+        self.assertIn("purple", err)
+
+    def test_color_bad_first_arg_raises(self):
+        err = run_err('say color(42, "hi")')
+        self.assertIn("color", err.lower())
+
+    def test_color_valid_names_no_error(self):
+        """All documented color names work without raising (plain text in NO_COLOR mode)."""
+        import os
+        old = os.environ.get("NO_COLOR")
+        os.environ["NO_COLOR"] = "1"
+        try:
+            for name in ("red", "green", "yellow", "cyan", "bold", "dim"):
+                out = run(f'say color("{name}", "test")')
+                self.assertEqual(out, "test", f"color({name!r}) should return plain text")
+        finally:
+            if old is None:
+                os.environ.pop("NO_COLOR", None)
+            else:
+                os.environ["NO_COLOR"] = old
+
+
+if __name__ == "__main__":
+    unittest.main()

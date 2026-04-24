@@ -29,7 +29,7 @@
             <!-- Keywords1: control flow -->
             <Keywords name="Keywords1">if else loop function return</Keywords>
             <!-- Keywords2: I/O and v0.4 builtins -->
-            <Keywords name="Keywords2">say count text number ask type</Keywords>
+            <Keywords name="Keywords2">say count text number ask type upper lower trim replace split join round abs min max first last sort reverse color</Keywords>
             <!-- Keywords3: logical operators -->
             <Keywords name="Keywords3">and or not</Keywords>
             <!-- Keywords4: comparison keywords -->
