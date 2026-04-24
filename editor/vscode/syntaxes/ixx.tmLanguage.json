@@ -7,9 +7,10 @@
     { "include": "#comments" },
     { "include": "#strings" },
     { "include": "#dash-blocks" },
+    { "include": "#constants-null" },
     { "include": "#booleans" },
     { "include": "#keywords-control" },
-    { "include": "#keywords-io" },
+    { "include": "#keywords-builtin" },
     { "include": "#keywords-logical" },
     { "include": "#keywords-comparison" },
     { "include": "#numbers" },
@@ -36,11 +37,19 @@
       ]
     },
     "dash-blocks": {
-      "comment": "Dash block markers at start of line: -, --, ---",
+      "comment": "Dash block markers at start of line: -, --, --- followed by whitespace",
       "patterns": [
         {
           "name": "punctuation.definition.block.ixx",
-          "match": "^([ \\t]*)(---|--|-)"
+          "match": "^([ \\t]*)(---|--|-)(?=\\s)"
+        }
+      ]
+    },
+    "constants-null": {
+      "patterns": [
+        {
+          "name": "constant.language.null.ixx",
+          "match": "\\bnothing\\b"
         }
       ]
     },
@@ -56,15 +65,15 @@
       "patterns": [
         {
           "name": "keyword.control.ixx",
-          "match": "\\b(if|else|loop)\\b"
+          "match": "\\b(function|return|if|else|loop)\\b"
         }
       ]
     },
-    "keywords-io": {
+    "keywords-builtin": {
       "patterns": [
         {
           "name": "support.function.builtin.ixx",
-          "match": "\\b(say)\\b"
+          "match": "\\b(say|count|text|number|ask|type)\\b"
         }
       ]
     },

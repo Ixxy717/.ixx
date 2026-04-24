@@ -13,9 +13,5 @@
     ["\"", "\""],
     ["(", ")"]
   ],
-  "indentationRules": {
-    "increaseIndentPattern": "^\\s*-\\s+",
-    "decreaseIndentPattern": "^\\s*---\\s*$"
-  },
   "onEnterRules": []
 }
