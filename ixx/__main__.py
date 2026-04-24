@@ -16,9 +16,9 @@ import os
 import re
 import difflib
 
-VERSION = "0.1.0"
+VERSION = "0.3.0-dev"
 
-_KNOWN_COMMANDS = ["run", "check", "version", "help", "shell"]
+_KNOWN_COMMANDS = ["run", "check", "version", "help", "shell", "do"]
 
 HELP_TEXT = """
 IXX - executable checklist-style code
@@ -31,6 +31,7 @@ Usage:
   ixx help                show this help
   ixx                     open the IXX interactive shell
   ixx shell               open the IXX interactive shell
+  ixx do "ip wifi"        run one shell command and exit
 
 Language quick-reference:
   say "Hello World"
@@ -250,6 +251,16 @@ def main() -> None:
     if cmd == "shell":
         from .shell.repl import run as _run_shell
         _run_shell()
+        return
+
+    # --- ixx do "<shell command>" ---
+    if cmd == "do":
+        if len(args) < 2:
+            print("ixx: 'do' requires a command.  Example: ixx do \"ip wifi\"",
+                  file=sys.stderr)
+            sys.exit(1)
+        from .shell.repl import run_command_once
+        run_command_once(" ".join(args[1:]))
         return
 
     # --- ixx run <file> ---

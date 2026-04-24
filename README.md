@@ -148,18 +148,81 @@ if user is "Ixxy"
 | `ixx check file.ixx` | check syntax without running |
 | `ixx version` | print the IXX version |
 | `ixx help` | show help and quick-reference |
-| `ixx shell` | interactive shell (planned) |
+| `ixx` | open the interactive shell |
+| `ixx shell` | open the interactive shell |
+| `ixx do "ip wifi"` | run one shell command and exit |
+
+---
+
+## IXX Shell
+
+Open the shell with `ixx`, then use everyday commands without memorising native syntax.
+
+```
+ixx> ip
+Adapter      IPv4
+-----------  ---------------
+Wi-Fi        192.168.1.42
+
+ixx> ip wifi
+Wi-Fi: 192.168.1.42
+
+ixx> cpu
+  CPU:     AMD Ryzen 9 5950X
+  Cores:   16
+  Threads: 32
+  Usage:   12%
+
+ixx> cpu core-count
+  AMD Ryzen 9 5950X
+  Cores:   16
+  Threads: 32
+
+ixx> ram
+  RAM
+  Total: 64.0 GB
+  Used:  21.0 GB
+  Free:  43.0 GB
+
+ixx> disk
+Drive  Label   Total    Free
+-----  ------  -------  -------
+C:     System  2.0 TB   870 GB
+
+ixx> disk space
+ixx> folder size downloads
+  downloads: 14.2 GB
+
+ixx> open desktop
+  Opened: C:\Users\you\Desktop
+
+ixx> list downloads
+```
+
+Single-command mode (useful for scripts and automation):
+
+```
+ixx do "ip"
+ixx do "cpu core-count"
+ixx do "folder size downloads"
+```
+
+Notes:
+- v0.3.0 is Windows-first for real system commands.
+- Cross-platform adapters (Linux, macOS) are planned for a future release.
+- Destructive commands (`delete`, `kill process`, `copy`, `move`) are still stubbed for safety.
+- The Python implementation is prototype v0 — not the final runtime.
 
 ---
 
 ## Current limitations
 
 - Requires Python 3.11+ and the `lark` library.
-- No interactive shell or REPL yet.
-- No built-in system commands yet (`cpu`, `ram`, `ip`, etc. are planned).
 - No functions, file I/O, or imports yet.
 - Variable names must be single words (no spaces).
 - Reserved words cannot be used as variable names: `if`, `else`, `loop`, `say`, `and`, `or`, `not`, `is`, `less`, `more`, `than`, `at`, `least`, `most`, `contains`, `YES`, `NO`.
+- Shell system commands are Windows-first in v0.3.0; Linux/macOS adapters are planned.
+- Destructive commands (`delete`, `kill process`, `copy`, `move`) exist in the guidance tree but do not execute yet.
 
 ---
 

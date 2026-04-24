@@ -1,0 +1,146 @@
+"""
+IXX Shell — File System Command Handlers (folder size, open, list)
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+from ..paths import resolve, PathNotFoundError
+from ..safety import format_bytes, render_table
+
+
+def _path_error(raw: str, hint: str | None = None) -> None:
+    print(f"\n  ixx: path not found\n    {raw}")
+    if hint:
+        print(f"\n  Try:\n    {hint}")
+    print()
+
+
+# ---------------------------------------------------------------------------
+# folder size
+# ---------------------------------------------------------------------------
+
+def handle_folder_size(args: list[str]) -> None:
+    """Calculate and display the total size of a folder."""
+    if not args:
+        print("\n  Usage:    folder size <path>")
+        print("  Example:  folder size downloads\n")
+        return
+
+    raw = " ".join(args)
+    try:
+        path = resolve(raw)
+    except PathNotFoundError as e:
+        alias = raw.split("/")[0].lower()
+        _path_error(e.raw, hint=f"folder size {alias}" if alias != raw else None)
+        return
+
+    if not path.is_dir():
+        print(f"\n  {path} is not a folder.\n")
+        return
+
+    total = 0
+    errors = 0
+    for dirpath, _dirnames, filenames in os.walk(path, onerror=lambda _: None):
+        for fname in filenames:
+            try:
+                total += os.path.getsize(os.path.join(dirpath, fname))
+            except OSError:
+                errors += 1
+
+    print(f"\n  {path.name}: {format_bytes(total)}")
+    if errors:
+        print(f"  ({errors} file(s) skipped — no read permission)")
+    print()
+
+
+# ---------------------------------------------------------------------------
+# open
+# ---------------------------------------------------------------------------
+
+def handle_open(args: list[str]) -> None:
+    """Open a folder or file with the OS default application."""
+    if not args:
+        print("\n  Usage:    open <path>")
+        print("  Example:  open downloads\n")
+        return
+
+    raw = " ".join(args)
+    try:
+        path = resolve(raw)
+    except PathNotFoundError as e:
+        alias = raw.split("/")[0].lower()
+        _path_error(e.raw, hint=f"open {alias}" if alias != raw else None)
+        return
+
+    try:
+        os.startfile(str(path))  # type: ignore[attr-defined]
+        print(f"\n  Opened: {path}\n")
+    except AttributeError:
+        # Non-Windows fallback
+        import subprocess
+        if sys.platform == "darwin":
+            subprocess.run(["open", str(path)])
+        else:
+            subprocess.run(["xdg-open", str(path)])
+        print(f"\n  Opened: {path}\n")
+    except Exception as e:
+        print(f"\n  Could not open: {path}\n  {e}\n")
+
+
+# ---------------------------------------------------------------------------
+# list
+# ---------------------------------------------------------------------------
+
+def handle_list(args: list[str]) -> None:
+    """List files and folders at a path (folders first)."""
+    if args:
+        raw = " ".join(args)
+        try:
+            path = resolve(raw)
+        except PathNotFoundError as e:
+            alias = raw.split("/")[0].lower()
+            _path_error(e.raw, hint=f"list {alias}" if alias != raw else None)
+            return
+    else:
+        path = Path.cwd()
+
+    if not path.is_dir():
+        print(f"\n  {path} is not a folder.\n")
+        return
+
+    try:
+        entries = list(path.iterdir())
+    except PermissionError:
+        print(f"\n  ixx: no permission to list: {path}\n")
+        return
+
+    folders = sorted(
+        [e for e in entries if e.is_dir()],
+        key=lambda e: e.name.lower(),
+    )
+    files = sorted(
+        [e for e in entries if e.is_file()],
+        key=lambda e: e.name.lower(),
+    )
+
+    rows: list[list[str]] = []
+    for entry in folders:
+        rows.append([entry.name, "folder", "-"])
+    for entry in files:
+        try:
+            size = format_bytes(entry.stat().st_size)
+        except OSError:
+            size = "-"
+        rows.append([entry.name, "file", size])
+
+    print(f"\n  {path}\n")
+    if not rows:
+        print("  (empty)\n")
+        return
+
+    print(render_table(["Name", "Type", "Size"], rows))
+    print()

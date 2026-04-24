@@ -330,12 +330,14 @@ class TestFullRegistry(unittest.TestCase):
 
     def test_cpu_has_expected_subcommands(self) -> None:
         cpu = self.registry.get("cpu")
-        for sub in ("usage", "core-count", "temperature", "speed", "info"):
+        # v0.3.0: cpu no longer has a "usage" subcommand (usage is the parent handler itself)
+        for sub in ("core-count", "temperature", "speed", "info"):
             self.assertIn(sub, cpu.subcommands)
 
     def test_disk_has_expected_subcommands(self) -> None:
         disk = self.registry.get("disk")
-        for sub in ("list", "health", "space", "partitions"):
+        # v0.3.0: disk no longer has a "list" subcommand (bare disk is the overview)
+        for sub in ("health", "space", "partitions"):
             self.assertIn(sub, disk.subcommands)
 
     def test_ip_has_expected_subcommands(self) -> None:
@@ -364,17 +366,18 @@ class TestFullRegistry(unittest.TestCase):
                     self.fail(f"handler for '{node.name}' raised: {exc}")
 
     def test_stub_handler_prints_not_implemented(self) -> None:
-        cpu = self.registry.get("cpu")
+        # gpu is still a stub in v0.3.0
+        gpu = self.registry.get("gpu")
         captured = io.StringIO()
         with patch("sys.stdout", captured):
-            cpu.handler([])
+            gpu.handler([])
         self.assertIn("not yet implemented", captured.getvalue())
 
     def test_guidance_on_full_registry_cpu(self) -> None:
-        # cpu has subcommands — must show guidance, not execute
+        # v0.3.0: cpu has executable_with_children=True — it executes AND shows subcommands
         result = get_guidance(self.registry, ["cpu"])
-        self.assertFalse(result.is_executable)
-        self.assertIn("usage", result.next_options)
+        self.assertTrue(result.is_executable)
+        self.assertIn("core-count", result.next_options)
 
     def test_guidance_on_full_registry_delete_shows_subcommands(self) -> None:
         result = get_guidance(self.registry, ["delete"])

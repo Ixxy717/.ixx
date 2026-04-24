@@ -68,35 +68,39 @@ What Phase 1 adds:
 
 ## Phase 2 — Interactive shell and REPL
 
-**Status:** in progress (branch: `v0.2.0-shell-planning`)
+**Status:** complete (branch: `v0.2.0-shell-planning`)
 
-What Phase 2 adds:
-- `ixx shell` / `ixx repl` opens an interactive prompt.
-- Type IXX commands and expressions, see results immediately.
-- Command history (up arrow, search).
-- Live grammar-aware command guidance (see spec/shell.md).
-- Fuzzy correction for mistyped commands.
-- Basic help system (`help`, `? command`, `command ?`).
-
-The guidance engine (`/shell/command-guidance/`) is the core investment of this phase. It must be structured as a data-driven grammar tree, not hardcoded string matching.
+What Phase 2 added:
+- `ixx shell` / `ixx` opens an interactive prompt
+- Command history, fuzzy correction, help system
+- Data-driven `CommandNode` / `CommandRegistry` guidance tree
+- All shell commands registered as stubs with metadata
 
 ---
 
 ## Phase 3 — Built-in system commands
 
-**Goal:** Common system tasks work out of the box.
+**Status:** in progress (branch: `v0.3.0-system-commands`)
 
-What Phase 3 adds (see spec/shell.md for full list):
-- `cpu`, `ram`, `gpu`, `disk` — hardware info
-- `ip`, `wifi`, `network`, `ports` — network info
-- `processes`, `kill process` — process management
-- `folder size`, `find file`, `open`, `list` — file exploration
-- `copy`, `move`, `delete` — file operations with safety prompts
-- `delete temp`, `delete empty-trash` — cleanup
-- Path aliases: `desktop`, `downloads`, `home`, `here`, etc.
-- Native passthrough: `native "..."`, `ps "..."`, `cmd "..."`, `sh "..."`
+First real-usefulness release. 14 command entries go live on Windows.
 
-Platform priority: Windows first (PowerShell/CMD replacement use case), then macOS, then Linux.
+What Phase 3 adds:
+
+- **Live commands:** `ip`, `ip wifi/ethernet/local`, `network`, `cpu`,
+  `cpu core-count`, `ram`, `disk`, `disk space`, `folder size`, `open`, `list`
+- **Platform adapter layer** (`shell/platform/`) — Windows real, Linux/macOS stubs
+- **Path alias system** (`shell/paths.py`) — `desktop`, `downloads`, `home`, `here`, etc.
+- **Format helpers** (`shell/safety.py`) — `format_bytes()`, `render_table()`
+- **`ixx do "command"`** — single-dispatch CLI mode
+- **`executable_with_children`** — parent commands execute overview AND show subcommands
+- **SSH/server command stubs** — in tree for guidance, no execution yet
+
+Still stubbed (planned for v0.4.0+):
+- `kill process`, `ports`, `processes` — process management
+- `copy`, `move`, `delete` — file operations
+- `find file` — file search
+- `native` — passthrough
+- `ssh`, `server`, `servers` — remote access
 
 ---
 

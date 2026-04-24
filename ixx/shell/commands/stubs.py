@@ -1,13 +1,14 @@
 """
-IXX Shell — Stub Commands
+IXX Shell — Command Registry
 
-Every command in this file is registered with the full metadata the
-guidance engine and help system need (description, subcommands, examples,
-safety flags).  The handler for each command simply prints a
-"not yet implemented" notice via the renderer.
+Defines the full command tree: metadata, examples, safety flags, and handlers.
 
-When v0.3.0 arrives, replace a stub handler with a real one — the
-guidance tree, help text, and fuzzy correction all stay unchanged.
+Commands that are live in v0.3.0 are wired to real handler functions.
+Commands planned for later releases use the _stub() factory which prints
+a "not yet implemented" notice.
+
+To add a new command: register a CommandNode here. The guidance engine,
+help system, and fuzzy correction all pick it up automatically.
 """
 
 from __future__ import annotations
@@ -15,15 +16,27 @@ from __future__ import annotations
 from ..registry import CommandNode, CommandRegistry
 from ..renderer import show_not_implemented
 
+# Live handlers (v0.3.0)
+from .hardware import handle_cpu, handle_cpu_cores, handle_ram
+from .network import (
+    handle_ip,
+    handle_ip_wifi,
+    handle_ip_ethernet,
+    handle_ip_local,
+    handle_network,
+)
+from .system import handle_disk, handle_disk_space
+from .files import handle_folder_size, handle_open, handle_list
+
 
 # ---------------------------------------------------------------------------
 # Stub handler factory
 # ---------------------------------------------------------------------------
 
-def _stub(path: str):
+def _stub(path: str, note: str = "planned for a future release"):
     """Return a handler that prints the standard not-implemented notice."""
     def handler(*_args, **_kwargs) -> None:
-        show_not_implemented(path)
+        show_not_implemented(path, note)
     handler.__name__ = path.replace(" ", "_")
     return handler
 
@@ -35,19 +48,16 @@ def _stub(path: str):
 def _build_cpu() -> CommandNode:
     return CommandNode(
         "cpu",
-        description="CPU name, usage, cores, threads, speed, temperature",
-        examples=["cpu", "cpu usage", "cpu core-count", "cpu temperature"],
-        handler=_stub("cpu"),
+        description="CPU name, usage, cores, threads",
+        examples=["cpu", "cpu core-count"],
+        handler=handle_cpu,
+        executable_with_children=True,
         subcommands={
-            "usage": CommandNode(
-                "usage",
-                description="Current CPU usage percentage",
-                handler=_stub("cpu usage"),
-            ),
             "core-count": CommandNode(
                 "core-count",
                 description="Core and thread count",
-                handler=_stub("cpu core-count"),
+                examples=["cpu core-count"],
+                handler=handle_cpu_cores,
             ),
             "temperature": CommandNode(
                 "temperature",
@@ -71,9 +81,10 @@ def _build_cpu() -> CommandNode:
 def _build_ram() -> CommandNode:
     return CommandNode(
         "ram",
-        description="Total, used, free RAM and speed",
-        examples=["ram", "ram free", "ram usage"],
-        handler=_stub("ram"),
+        description="Total, used, and free RAM",
+        examples=["ram"],
+        handler=handle_ram,
+        executable_with_children=True,
         subcommands={
             "free": CommandNode(
                 "free",
@@ -106,25 +117,22 @@ def _build_gpu() -> CommandNode:
 def _build_disk() -> CommandNode:
     return CommandNode(
         "disk",
-        description="List disks, check health and space",
-        examples=["disk", "disk health", "disk space", "disk list"],
-        handler=_stub("disk"),
+        description="List disks, space, and health",
+        examples=["disk", "disk space"],
+        handler=handle_disk,
+        executable_with_children=True,
         subcommands={
-            "list": CommandNode(
-                "list",
-                description="List all disks",
-                handler=_stub("disk list"),
+            "space": CommandNode(
+                "space",
+                description="Used and free space per disk",
+                examples=["disk space"],
+                handler=handle_disk_space,
             ),
             "health": CommandNode(
                 "health",
                 description="SMART health status",
                 handler=_stub("disk health"),
                 requires_admin=True,
-            ),
-            "space": CommandNode(
-                "space",
-                description="Used and free space per disk",
-                handler=_stub("disk space"),
             ),
             "partitions": CommandNode(
                 "partitions",
@@ -138,9 +146,10 @@ def _build_disk() -> CommandNode:
 def _build_network() -> CommandNode:
     return CommandNode(
         "network",
-        description="All adapters, IPs, status, gateway, DNS",
+        description="All adapters, IPs, status, gateway",
         examples=["network"],
-        handler=_stub("network"),
+        handler=handle_network,
+        executable_with_children=True,
     )
 
 
@@ -148,33 +157,34 @@ def _build_ip() -> CommandNode:
     return CommandNode(
         "ip",
         description="Show active local IP addresses",
-        examples=["ip", "ip wifi", "ip ethernet", "ip public"],
-        handler=_stub("ip"),
+        examples=["ip", "ip wifi", "ip ethernet", "ip local"],
+        handler=handle_ip,
+        executable_with_children=True,
         subcommands={
             "all": CommandNode(
                 "all",
                 description="All active IPs",
-                handler=_stub("ip all"),
+                handler=handle_ip,
             ),
             "wifi": CommandNode(
                 "wifi",
                 description="Wi-Fi IPv4 address",
-                handler=_stub("ip wifi"),
+                handler=handle_ip_wifi,
             ),
             "ethernet": CommandNode(
                 "ethernet",
                 description="Ethernet IPv4 address",
-                handler=_stub("ip ethernet"),
+                handler=handle_ip_ethernet,
+            ),
+            "local": CommandNode(
+                "local",
+                description="All local/private IPs",
+                handler=handle_ip_local,
             ),
             "public": CommandNode(
                 "public",
                 description="Public-facing IP address",
                 handler=_stub("ip public"),
-            ),
-            "local": CommandNode(
-                "local",
-                description="Local network IP",
-                handler=_stub("ip local"),
             ),
         },
     )
@@ -183,7 +193,7 @@ def _build_ip() -> CommandNode:
 def _build_wifi() -> CommandNode:
     return CommandNode(
         "wifi",
-        description="Wi-Fi name, IP, signal strength, adapter info",
+        description="Wi-Fi name, IP, signal strength",
         examples=["wifi"],
         handler=_stub("wifi"),
     )
@@ -238,8 +248,12 @@ def _build_folder() -> CommandNode:
                 "size",
                 description="Size of a folder",
                 arg_hint="<path>",
-                examples=["folder size downloads", 'folder size "My Documents"'],
-                handler=_stub("folder size"),
+                examples=[
+                    "folder size downloads",
+                    "folder size desktop",
+                    'folder size "desktop/my folder"',
+                ],
+                handler=handle_folder_size,
             ),
         },
     )
@@ -257,7 +271,6 @@ def _build_find() -> CommandNode:
                 examples=[
                     'find file "invoice"',
                     'find file "*.pdf" in downloads',
-                    'find file "resume" in documents',
                 ],
                 handler=_stub("find file"),
             ),
@@ -268,20 +281,20 @@ def _build_find() -> CommandNode:
 def _build_open() -> CommandNode:
     return CommandNode(
         "open",
-        description="Open a folder in the file explorer",
+        description="Open a folder or file in the explorer",
         arg_hint="<path>",
-        examples=["open downloads", "open desktop", "open documents"],
-        handler=_stub("open"),
+        examples=["open downloads", "open desktop", 'open "desktop/my folder"'],
+        handler=handle_open,
     )
 
 
 def _build_list() -> CommandNode:
     return CommandNode(
         "list",
-        description="List files in a folder",
+        description="List files and folders",
         arg_hint="<path>",
-        examples=["list downloads", "list desktop", "list desktop/Hardware"],
-        handler=_stub("list"),
+        examples=["list downloads", "list desktop", "list"],
+        handler=handle_list,
     )
 
 
@@ -293,7 +306,6 @@ def _build_copy() -> CommandNode:
         examples=[
             "copy report.pdf to desktop",
             "copy downloads/file.zip to documents",
-            "copy folder project to desktop/backup",
         ],
         handler=_stub("copy"),
     )
@@ -304,10 +316,7 @@ def _build_move() -> CommandNode:
         "move",
         description="Move a file or folder to a destination",
         arg_hint="<source> to <destination>",
-        examples=[
-            "move report.pdf to documents",
-            "move folder old-stuff to documents/archive",
-        ],
+        examples=["move report.pdf to documents"],
         destructive=True,
         handler=_stub("move"),
     )
@@ -319,10 +328,8 @@ def _build_delete() -> CommandNode:
         description="Delete a file, folder, or run cleanup",
         examples=[
             "delete file old.txt",
-            "delete folder TargetFolder",
-            "delete folder TargetFolder recursive",
+            "delete folder old-stuff",
             "delete temp",
-            "delete empty-trash",
         ],
         destructive=True,
         subcommands={
@@ -340,10 +347,8 @@ def _build_delete() -> CommandNode:
                 arg_hint="<path> [recursive] [force] [dry-run]",
                 destructive=True,
                 examples=[
-                    "delete folder TargetFolder",
-                    "delete folder TargetFolder recursive",
-                    "delete folder TargetFolder recursive force",
-                    "delete folder TargetFolder recursive dry-run",
+                    "delete folder old-stuff",
+                    "delete folder old-stuff recursive",
                 ],
                 handler=_stub("delete folder"),
             ),
@@ -368,14 +373,52 @@ def _build_delete() -> CommandNode:
 def _build_native() -> CommandNode:
     return CommandNode(
         "native",
-        description="Pass a command directly to the host shell (escape hatch)",
+        description="Pass a command to the host shell (escape hatch)",
         arg_hint='"<shell command>"',
-        examples=[
-            'native "Get-NetIPAddress"',
-            'native "dir"',
-            'native "ls -la"',
-        ],
+        examples=['native "Get-NetIPAddress"', 'native "dir"'],
         handler=_stub("native"),
+    )
+
+
+def _build_ssh() -> CommandNode:
+    return CommandNode(
+        "ssh",
+        description="Connect to a remote server via SSH",
+        arg_hint="<user@host or saved-server>",
+        examples=["ssh user@192.168.1.50", "ssh my-server"],
+        handler=_stub("ssh", note="planned for remote access release"),
+    )
+
+
+def _build_servers() -> CommandNode:
+    return CommandNode(
+        "servers",
+        description="List saved SSH server profiles",
+        examples=["servers"],
+        handler=_stub("servers", note="planned for remote access release"),
+    )
+
+
+def _build_server() -> CommandNode:
+    return CommandNode(
+        "server",
+        description="Manage saved SSH server profiles",
+        examples=["server add my-server", "server list"],
+        subcommands={
+            "add": CommandNode(
+                "add",
+                description="Save a new server profile",
+                arg_hint="<name>",
+                examples=["server add my-server"],
+                handler=_stub("server add", note="planned for remote access release"),
+            ),
+            "list": CommandNode(
+                "list",
+                description="List saved server profiles",
+                examples=["server list"],
+                handler=_stub("server list", note="planned for remote access release"),
+            ),
+        },
     )
 
 
@@ -384,7 +427,7 @@ def _build_native() -> CommandNode:
 # ---------------------------------------------------------------------------
 
 def register_all(registry: CommandRegistry) -> None:
-    """Register every stub command into *registry*."""
+    """Register every command into *registry*."""
     registry.register_all([
         _build_cpu(),
         _build_ram(),
@@ -404,4 +447,7 @@ def register_all(registry: CommandRegistry) -> None:
         _build_move(),
         _build_delete(),
         _build_native(),
+        _build_ssh(),
+        _build_servers(),
+        _build_server(),
     ])

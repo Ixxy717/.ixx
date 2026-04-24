@@ -4,6 +4,48 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.3.0-dev] — in progress (branch: v0.3.0-system-commands)
+
+First real-usefulness release. Shell commands now actually work on Windows.
+
+### Added
+
+- **14 live command entries** — real implementations replacing stubs:
+  `ip`, `ip all`, `ip wifi`, `ip ethernet`, `ip local`, `network`,
+  `cpu`, `cpu core-count`, `ram`, `disk`, `disk space`,
+  `folder size`, `open`, `list`
+- **`shell/platform/`** — cross-platform adapter layer (`windows.py` real,
+  `linux.py` / `macos.py` stubs for later)
+- **`shell/paths.py`** — path alias system (`desktop`, `downloads`, `documents`,
+  `pictures`, `music`, `videos`, `home`, `temp`, `appdata`, `here`, `.`)
+- **`shell/safety.py`** — `format_bytes()` helper and `render_table()` renderer
+- **`shell/commands/hardware.py`** — `cpu`, `ram` handlers
+- **`shell/commands/network.py`** — `ip`, `network` handlers
+- **`shell/commands/system.py`** — `disk` handlers
+- **`shell/commands/files.py`** — `folder size`, `open`, `list` handlers
+- **`ixx do "command"`** — run one shell command and exit (`ixx do "ip wifi"`)
+- **`executable_with_children`** field on `CommandNode` — parent commands
+  (`ip`, `cpu`, `ram`, `disk`, `network`) now execute standalone AND keep
+  subcommands available
+- **SSH/server stubs** — `ssh`, `servers`, `server add`, `server list` registered
+  in the command tree; stub-only, no credentials or remote execution
+
+### Changed
+
+- `VERSION` bumped to `0.3.0-dev`
+- Stub messages updated from "coming in v0.3.0" to "planned for a future release"
+- `show_not_implemented()` accepts an optional `note` argument
+- `repl.py` gains `run_command_once()` for single-dispatch use
+- Windows console now configured for UTF-8 output on shell start
+
+### Tests
+
+- **`tests/test_v030.py`** — 66 new tests covering path aliases, format helpers,
+  guidance model, command handlers (mocked platform), and `ixx do`
+- **Total: 218 tests passing** (98 language + 54 shell + 66 v0.3.0)
+
+---
+
 ---
 
 ## [0.2.0-dev] — in progress (branch: v0.2.0-shell-planning)

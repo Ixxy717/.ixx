@@ -206,9 +206,9 @@ def show_unknown(word: str, suggestions: list[str]) -> None:
     print()
 
 
-def show_not_implemented(command_path: str) -> None:
+def show_not_implemented(command_path: str, note: str = "planned for a future release") -> None:
     """Print the standard stub message for commands not yet wired up."""
-    print(f"\n  [{_c(_DIM, command_path + '  -  not yet implemented, coming in v0.3.0')}]\n")
+    print(f"\n  [{_c(_DIM, f'{command_path}  -  not yet implemented, {note}')}]\n")
 
 
 def show_destructive_prompt(description: str) -> bool:

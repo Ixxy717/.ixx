@@ -42,6 +42,7 @@ class CommandNode:
     requires_admin: bool = False
     warning_text: str = ""      # overrides the generic destructive warning in hints
     handler: Callable[..., None] | None = None  # None = not yet implemented
+    executable_with_children: bool = False  # True: execute alone AND show subcommands
 
     def is_leaf(self) -> bool:
         """True when there are no further subcommands expected."""

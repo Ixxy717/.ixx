@@ -410,3 +410,70 @@ The `command-guidance/` module is the core of the shell's identity. It holds the
 - Not a way to hide the OS completely.
 
 It is a simpler command layer for common everyday tasks.
+
+---
+
+## SSH / Remote administration (long-term vision)
+
+IXX should eventually support SSH as a first-class workflow, not raw terminal passthrough.
+
+### Planned friendly syntax
+
+```
+ssh user@192.168.1.50
+ssh my-server
+
+servers
+server add my-server
+
+run on my-server "disk space"
+run on my-server "cpu"
+
+copy report.pdf to my-server:/home/user/
+copy my-server:/var/log/syslog to downloads
+```
+
+### Remote prompt identity
+
+```
+ixx>                   local shell
+ixx my-server>         connected remote shell
+ixx user@server>       connected remote shell
+```
+
+### Remote output labelling
+
+When commands are run remotely, output labels the target:
+
+```
+[my-server]
+Drive   Total    Free
+/       915 GB   880 GB
+/data   3.6 TB   3.6 TB
+```
+
+### Design requirements (future)
+
+- Use the system OpenSSH client or a mature SSH library. Never implement raw crypto.
+- Prefer SSH key authentication. Never store plaintext passwords.
+- Saved server profiles are explicit and user-managed (`server add`).
+- Support safe remote command preview before execution.
+- Local and remote commands use the same IXX syntax where possible.
+- The remote target is always clearly visible in the prompt and output.
+
+### v0.3.0 status
+
+`ssh`, `servers`, `server add`, `server list` are registered in the command
+guidance tree as stubs. They provide guidance and help text but do not
+connect to anything. No credentials are stored or prompted.
+
+Full SSH functionality is planned for a future release (v0.5.0+).
+
+### Staged roadmap for remote access
+
+| Version | What gets added |
+|---|---|
+| v0.3.0  | `ssh`, `servers`, `server` stubs in guidance tree only |
+| v0.4.0  | Possibly first `ssh user@host` connection prototype |
+| v0.5.0  | Saved server profiles, `run on server "..."` |
+| v0.6.0+ | Remote file copy, remote IXX commands, multi-server |

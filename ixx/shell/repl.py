@@ -31,7 +31,7 @@ from .renderer import (
 )
 
 PROMPT = "ixx> "
-VERSION = "0.2.0-dev"
+VERSION = "0.3.0-dev"
 
 # ---------------------------------------------------------------------------
 # Readline / history (best-effort; silently skipped if unavailable)
@@ -102,6 +102,21 @@ def _handle_help(registry: CommandRegistry, tokens: list[str]) -> None:
 # Main loop
 # ---------------------------------------------------------------------------
 
+def _utf8_stdout() -> None:
+    """On Windows, reconfigure stdout/stderr to UTF-8 so Unicode output works."""
+    if sys.platform == "win32":
+        import io
+        try:
+            sys.stdout = io.TextIOWrapper(
+                sys.stdout.buffer, encoding="utf-8", errors="replace"
+            )
+            sys.stderr = io.TextIOWrapper(
+                sys.stderr.buffer, encoding="utf-8", errors="replace"
+            )
+        except Exception:
+            pass
+
+
 def _make_registry() -> CommandRegistry:
     registry = CommandRegistry()
     register_all(registry)
@@ -110,6 +125,7 @@ def _make_registry() -> CommandRegistry:
 
 def run() -> None:
     """Start the IXX interactive shell."""
+    _utf8_stdout()
     _setup_readline()
     registry = _make_registry()
 
@@ -164,3 +180,43 @@ def run() -> None:
         else:
             # Matched a node but not yet at an executable point — show hints
             show_hints(result)
+
+
+# ---------------------------------------------------------------------------
+# Single-command dispatch  (used by ixx do "...")
+# ---------------------------------------------------------------------------
+
+def run_command_once(line: str) -> None:
+    """Build the registry, dispatch *line* as a single command, then return.
+
+    Used by ``ixx do "ip wifi"`` — no banner, no loop.
+    """
+    _utf8_stdout()
+    registry = _make_registry()
+    tokens = _tokenize(line.strip())
+    if not tokens:
+        return
+
+    first = tokens[0].lower()
+
+    # Help / ? passthrough
+    if first in ("help", "?") or (len(tokens) >= 2 and tokens[-1] == "?"):
+        _handle_help(registry, tokens)
+        return
+
+    result = get_guidance(registry, tokens)
+
+    if result.matched_node is None:
+        suggestions = registry.suggest(first)
+        show_unknown(first, suggestions)
+        return
+
+    if result.is_executable:
+        node = result.matched_node
+        if node.handler is not None:
+            node.handler(result.remaining_args)
+        else:
+            path = " ".join(tokens[:result.depth])
+            show_not_implemented(path)
+    else:
+        show_hints(result)
