@@ -135,8 +135,8 @@ say "Hello, {name}"         # Hello, Ixxy
 
 Rules:
 - Only `{identifier}` syntax is supported — no expressions inside braces.
-- If the variable is not defined, the original `{name}` token is left as-is in
-  the output (no error, no crash).
+- If the variable is not defined, `{?name}` is shown in the output and a warning
+  is printed to stderr. The script continues without crashing.
 - String literals do **not** process escape sequences. `"\n"` is literally
   backslash-n, not a newline character.
 
@@ -222,14 +222,22 @@ x = 5,         # parse error — trailing comma is not valid
 
 | Operator | Symbol | Example | Result type |
 |---|---|---|---|
-| Addition | `+` | `3 + 4` | number |
+| Addition / concatenation | `+` | `3 + 4` | number |
+| String concatenation | `+` | `"Hello, " + name` | text |
 | Subtraction | `-` | `10 - 3` | number |
 | Multiplication | `*` | `5 * 2` | number |
 | Division | `/` | `10 / 4` | number (float) |
 | Negation | `-x` | `-5` | number |
 | Grouping | `(expr)` | `(2 + 3) * 4` | any |
 
-String concatenation is done with `join` or `text` — there is no `+` for strings.
+`+` works on numbers and on text. When either side is text, the result is string
+concatenation — the other side is converted to its display form first:
+
+```
+greeting = "Hello, " + name
+label = "Score: " + text(score)
+mixed = "Count: " + count(items)
+```
 
 ---
 
@@ -516,7 +524,9 @@ say join(parts, " | ")                # a | b | c
 | `round(x)` | number | number | Round to nearest integer (or decimal places with second arg) |
 | `abs(x)` | number | number | Absolute value |
 | `min(a, b)` | number, number | number | Smaller of two numbers |
+| `min(list)` | list | any | Smallest item in a list |
 | `max(a, b)` | number, number | number | Larger of two numbers |
+| `max(list)` | list | any | Largest item in a list |
 
 ```
 say round(3.7)           # 4
@@ -551,8 +561,7 @@ say rev                # grape, banana, apple
 |---|---|---|---|
 | `color(name, text)` | text, text | text | Returns ANSI-colored text |
 
-Supported color names: `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`,
-`white`, `bold`.
+Supported color names: `red`, `green`, `yellow`, `cyan`, `bold`, `dim`.
 
 ```
 say color("green", "All good")

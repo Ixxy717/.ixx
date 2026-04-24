@@ -464,8 +464,8 @@ Read and write files using the built-in functions below. Paths are relative to t
 |------|-----------|---------|-------------|
 | `read(path)` | text | text | Read the full contents of a file as a single string |
 | `readlines(path)` | text | list | Read a file and return its lines as a list (newlines stripped) |
-| `write(path, content)` | text, text | nothing | Write (overwrite) text to a file |
-| `append(path, content)` | text, text | nothing | Append text to the end of a file |
+| `write(path, content)` | text, any | nothing | Write (overwrite) any value to a file — uses IXX display format |
+| `append(path, content)` | text, any | nothing | Append any value to the end of a file — uses IXX display format |
 | `exists(path)` | text | YES/NO | Check whether a file or folder exists |
 
 All five raise an `IXXRuntimeError` with a friendly message if the file cannot be read or written (file not found, permission denied, etc.).
