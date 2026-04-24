@@ -4,41 +4,62 @@ Adds syntax highlighting for `.ixx` (IXX) source files in Notepad++.
 
 > **Note:** Notepad++ UDL files use fixed hardcoded colors and do not
 > automatically follow your editor theme. Import the file that matches
-> the background you use.
+> your Notepad++ background.
 
 ## Which file to import
 
-| Your Notepad++ theme | File to import         |
-|----------------------|------------------------|
-| Dark background      | `ixx-udl-dark.xml`     |
-| Light background     | `ixx-udl-light.xml`    |
+| Your Notepad++ background | File to import         | UDL name registered |
+|---------------------------|------------------------|---------------------|
+| Default / light (recommended) | `ixx-udl.xml`     | `IXX`               |
+| Light (named variant)     | `ixx-udl-light.xml`    | `IXX Light`         |
+| Dark Notepad++ theme      | `ixx-udl-dark.xml`     | `IXX Dark`          |
+
+**Recommended:** Most Notepad++ installs use a light background. Import `ixx-udl.xml`.
+It registers as `IXX`, auto-detects `.ixx` files, and uses light-safe colors (no black boxes).
+
+Only import `ixx-udl-dark.xml` if you have set Notepad++ to a dark background theme.
+It registers as `IXX Dark` and does **not** claim the `.ixx` extension automatically —
+apply it manually via **Language → IXX Dark** when needed.
 
 ## Installation
 
 1. Open **Notepad++**.
 2. Go to **Language → User Defined Language → Define your language…**
 3. Click **Import**.
-4. Select the correct `.xml` file from this folder (dark or light).
+4. Select the correct `.xml` file from this folder.
 5. Click **OK** and close the dialog.
 6. **Restart Notepad++** if the language does not appear immediately.
-7. Open any `.ixx` file — it should auto-detect as **IXX**.
-8. If it does not auto-detect, go to **Language → IXX** to apply it manually.
+7. Open any `.ixx` file — `ixx-udl.xml` and `ixx-udl-light.xml` auto-detect `.ixx`.
+   For the dark UDL, go to **Language → IXX Dark** to apply manually.
+
+## Switching between light and dark
+
+If you want to switch from one UDL to another:
+
+1. Go to **Language → User Defined Language → Define your language…**
+2. Select the old `IXX` (or `IXX Light`) entry.
+3. Click **Remove**, then close.
+4. Restart Notepad++.
+5. Import the new UDL file.
+
+Do not import both `ixx-udl.xml` and `ixx-udl-light.xml` at the same time —
+they both claim the `ixx` extension and will conflict.
 
 ## What is highlighted
 
-| Token                                        | Dark theme     | Light theme    |
-|----------------------------------------------|----------------|----------------|
-| `# comment`                                  | Green          | Green          |
-| `"string"`                                   | Orange         | Dark red       |
-| `if`, `else`, `loop`, `function`, `return`   | Bold blue      | Bold blue      |
-| `say`, `count`, `upper`, `color`, etc.       | Yellow-green   | Dark gold      |
-| `and`, `or`, `not`                           | Purple         | Purple         |
-| `is`, `less than`, `contains`, etc.          | Light blue     | Dark navy      |
-| `YES`, `NO`, `yes`, `no`                     | Bold teal      | Bold teal      |
-| `nothing`                                    | Teal           | Teal           |
-| `---`, `--` (block markers)                  | Bold grey      | Bold grey      |
-| `=`, `+`, `-`, `*`, `/`, `,`                 | White/grey     | Dark grey      |
-| Numbers (`42`, `3.14`)                       | Light green    | Blue           |
+| Token                                        | Light / default        | Dark (`IXX Dark`)  |
+|----------------------------------------------|------------------------|--------------------|
+| `# comment`                                  | Dark green             | Green              |
+| `"string"`                                   | Dark red               | Orange             |
+| `if`, `else`, `loop`, `function`, `return`   | Bold blue              | Bold blue          |
+| `say`, `count`, `upper`, `color`, etc.       | Dark gold              | Yellow-green       |
+| `and`, `or`, `not`                           | Purple                 | Purple             |
+| `is`, `less than`, `contains`, etc.          | Dark navy              | Light blue         |
+| `YES`, `NO`, `yes`, `no`                     | Bold dark teal         | Bold teal          |
+| `nothing`                                    | Dark teal              | Teal               |
+| `---`, `--` (block markers)                  | Bold grey              | Bold grey          |
+| `=`, `+`, `-`, `*`, `/`, `,`                 | Dark grey              | White/grey         |
+| Numbers (`42`, `3.14`)                       | Blue                   | Light green        |
 
 ## Notes
 
