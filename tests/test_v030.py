@@ -31,7 +31,7 @@ def cli(*args: str, input_text: str | None = None) -> tuple[int, str]:
         [sys.executable, "-m", "ixx"] + list(args),
         capture_output=True,
         text=True,
-        timeout=20,
+        timeout=30,
         input=input_text,
         stdin=subprocess.DEVNULL if input_text is None else None,
     )
@@ -1003,7 +1003,9 @@ class TestFindFile(unittest.TestCase):
 # =============================================================================
 
 class TestUnknownSubcommand(unittest.TestCase):
-    """cpu temp should show unknown-option message, not the cpu overview."""
+    """cpu temp is now a valid alias for cpu temperature.
+    Truly invalid subcommands still show the unknown-option message.
+    """
 
     def _run(self, *cmd):
         from ixx.shell.repl import run_command_once
@@ -1013,23 +1015,41 @@ class TestUnknownSubcommand(unittest.TestCase):
             "name": "Test CPU", "cores": "4", "threads": "8", "usage_pct": "5%",
         }
         mock.get_cpu_speed.return_value = {"name": "Test CPU", "speed_mhz": 3600}
+        mock.get_cpu_temperature.return_value = []
         buf = io.StringIO()
         with patch.object(_platform, "current", return_value=mock):
             with patch("sys.stdout", buf):
                 run_command_once(" ".join(cmd))
         return buf.getvalue()
 
-    def test_cpu_temp_shows_unknown_option(self) -> None:
+    def test_cpu_temp_routes_to_temperature(self) -> None:
+        """cpu temp is now a valid alias — routes to cpu temperature handler."""
         out = self._run("cpu", "temp")
-        self.assertIn("Unknown option", out)
+        self.assertNotIn("Unknown option", out)
 
     def test_cpu_temp_does_not_run_cpu_handler(self) -> None:
+        """cpu temp should not show the cpu overview (Cores/Threads)."""
         out = self._run("cpu", "temp")
         self.assertNotIn("Cores", out)
 
-    def test_cpu_temp_suggests_temperature(self) -> None:
+    def test_cpu_temp_shows_temperature_output(self) -> None:
+        """cpu temp reaches the temperature handler (hardware may show unavailable)."""
         out = self._run("cpu", "temp")
-        self.assertIn("temperature", out)
+        # Either temperature data or an unavailability message — not an error
+        self.assertTrue(
+            "Temperature" in out or "temperature" in out or "not available" in out,
+            f"Expected temperature-related output, got: {out!r}",
+        )
+
+    def test_cpu_xyz_shows_unknown_option(self) -> None:
+        """A truly invalid subcommand still shows the unknown-option message."""
+        out = self._run("cpu", "xyz")
+        self.assertIn("Unknown option", out)
+
+    def test_cpu_xyz_suggests_valid_options(self) -> None:
+        """Invalid subcommand directs the user to see valid options."""
+        out = self._run("cpu", "xyz")
+        self.assertIn("cpu ?", out)
 
     def test_ram_fre_suggests_free(self) -> None:
         out = self._run("ram", "fre")

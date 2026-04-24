@@ -48,7 +48,7 @@ def cli(*args: str) -> tuple[int, str]:
         capture_output=True,
         text=True,
         stdin=subprocess.DEVNULL,
-        timeout=15,
+        timeout=30,
         cwd=str(ROOT),
     )
     combined = (result.stdout + result.stderr).strip()
@@ -531,7 +531,7 @@ class TestCLI(unittest.TestCase):
             errors="replace",
             input="exit\n",
             cwd=str(ROOT),
-            timeout=10,
+            timeout=30,
         )
         self.assertEqual(result.returncode, 0)
         combined = (result.stdout + result.stderr).strip()

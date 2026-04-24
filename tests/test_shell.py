@@ -355,15 +355,44 @@ class TestFullRegistry(unittest.TestCase):
         self.assertTrue(disk.subcommands["health"].requires_admin)
 
     def test_stub_handlers_callable(self) -> None:
-        """Stub handlers should be callable and not raise."""
+        """All registered handlers are callable and do not raise uncaught exceptions.
+
+        Live platform calls and interactive prompts are mocked so this test
+        never touches the network, hardware, or stdin and completes quickly.
+        """
+        from unittest.mock import MagicMock, patch as _patch
+        from ixx.shell import platform as _platform
+
+        mock = MagicMock()
+        mock.get_cpu_info.return_value = {
+            "name": "Test CPU", "cores": "4", "threads": "8", "usage_pct": "5%",
+        }
+        mock.get_cpu_speed.return_value = {"name": "Test CPU", "speed_mhz": 3200}
+        mock.get_cpu_temperature.return_value = []
+        mock.get_ram_info.return_value = {
+            "total_bytes": 8 * 1024**3, "used_bytes": 4 * 1024**3,
+            "available_bytes": 4 * 1024**3,
+        }
+        mock.get_disk_info.return_value = [{
+            "drive": "C:", "label": "", "total_bytes": 500 * 1024**3,
+            "free_bytes": 200 * 1024**3, "used_bytes": 300 * 1024**3,
+        }]
+        mock.get_ip_info.return_value = [{"adapter": "Wi-Fi", "ipv4": "10.0.0.1"}]
+        mock.get_network_stats.return_value = {}
+        mock.get_listening_ports.return_value = []
+        mock.get_processes.return_value = []
+
         captured = io.StringIO()
-        for node in self.registry.all_nodes():
-            if node.handler:
-                try:
-                    with patch("sys.stdout", captured):
-                        node.handler([])
-                except Exception as exc:  # pragma: no cover
-                    self.fail(f"handler for '{node.name}' raised: {exc}")
+        with patch.object(_platform, "current", return_value=mock):
+            # "q" causes the demo walkthrough to quit on the first prompt
+            with _patch("builtins.input", return_value="q"):
+                for node in self.registry.all_nodes():
+                    if node.handler:
+                        try:
+                            with patch("sys.stdout", captured):
+                                node.handler([])
+                        except Exception as exc:  # pragma: no cover
+                            self.fail(f"handler for '{node.name}' raised: {exc}")
 
     def test_stub_handler_prints_not_implemented(self) -> None:
         # disk health is still a stub in v0.3.0 (requires admin SMART access)
