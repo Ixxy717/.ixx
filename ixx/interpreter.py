@@ -549,8 +549,7 @@ class Interpreter:
                 self._call_depth -= 1
 
         raise IXXRuntimeError(
-            f"'{name}' is not a function. "
-            f"Tip: define it with: function {name} ..."
+            f"'{name}' is not defined."
         )
 
     # ── string interpolation ───────────────────────────────────────────────────

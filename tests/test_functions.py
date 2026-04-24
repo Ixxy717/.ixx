@@ -275,7 +275,7 @@ foo "bar"
 """
         err = run_err(src)
         self.assertIn("foo", err)
-        self.assertIn("not a function", err)
+        self.assertIn("not defined", err)
 
     def test_return_outside_function_is_parse_error(self):
         """return at top level should raise a parse or runtime error."""

@@ -4,6 +4,15 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.5.1] — Error message cleanup
+
+### Fixed
+
+- **Shell runtime error format** — IXX errors typed in the interactive shell (e.g. `say color(...)`) now display as `  Error: message` with consistent indentation and optional red colouring, instead of the raw `runtime error: ...` line.
+- **Unknown function error** — "X is not a function. Tip: define it with: function X ..." replaced with the simpler `'X' is not defined.` — the old tip was confusing when the name was a known built-in or a valid word.
+
+---
+
 ## [0.5.0] — Extended built-in library
 
 ### Added

@@ -137,7 +137,9 @@ def _try_run_ixx(first_line: str, prompt_fn) -> bool:
             try:
                 Interpreter().run(program)
             except IXXRuntimeError as e:
-                print(f"  runtime error: {e}")
+                from .renderer import _c, _RED, _ANSI
+                label = _c(_RED, "Error") if _ANSI else "Error"
+                print(f"\n  {label}: {e}\n")
             return True
         except UnexpectedEOF:
             # Incomplete — ask for more input
