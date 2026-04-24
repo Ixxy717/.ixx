@@ -69,11 +69,13 @@ def get_guidance(registry: CommandRegistry, tokens: list[str]) -> GuidanceResult
     remaining = tokens[depth:]
 
     # Determine executability:
-    # A node is executable if it has a handler OR it has an arg_hint
-    # (meaning it accepts free-form arguments like a path).
+    # A node is executable only when it is a true leaf (no subcommands) or
+    # accepts free-form arguments (arg_hint, no subcommands).
+    # Nodes that have subcommands always show guidance first — even if they
+    # also carry a handler — so the user is directed to the specific option.
     has_handler = node.handler is not None
     has_arg_hint = bool(node.arg_hint)
-    executable = has_handler or has_arg_hint
+    executable = (has_handler or has_arg_hint) and not bool(node.subcommands)
 
     return GuidanceResult(
         matched_node=node,

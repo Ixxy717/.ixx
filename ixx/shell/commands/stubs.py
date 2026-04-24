@@ -213,6 +213,7 @@ def _build_kill() -> CommandNode:
         description="End a process by name or ID",
         examples=["kill process chrome", "kill process 1234"],
         destructive=True,
+        warning_text="this command can stop running programs.",
         subcommands={
             "process": CommandNode(
                 "process",
@@ -220,6 +221,7 @@ def _build_kill() -> CommandNode:
                 arg_hint="<name or PID>",
                 examples=["kill process chrome", "kill process 1234"],
                 destructive=True,
+                warning_text="this command can stop running programs.",
                 handler=_stub("kill process"),
             ),
         },

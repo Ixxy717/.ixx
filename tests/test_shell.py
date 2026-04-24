@@ -191,14 +191,18 @@ class TestGuidance(unittest.TestCase):
         self.assertFalse(result.is_executable)
         self.assertEqual(result.next_options, [])
 
-    # Top-level node with handler + subcommands
-    def test_top_level_with_handler_is_executable(self) -> None:
+    # Top-level node with handler + subcommands — should show guidance, NOT execute
+    def test_top_level_with_subcommands_is_not_executable(self) -> None:
         result = get_guidance(self.registry, ["cpu"])
-        self.assertTrue(result.is_executable)
+        self.assertFalse(result.is_executable)
         self.assertIsNotNone(result.matched_node)
         self.assertEqual(result.matched_node.name, "cpu")
 
-    def test_top_level_shows_subcommand_options(self) -> None:
+    # Leaf node (no subcommands, has handler) — must be executable
+    def test_leaf_node_is_executable(self) -> None:
+        result = get_guidance(self.registry, ["cpu", "usage"])
+        self.assertTrue(result.is_executable)
+        self.assertEqual(result.matched_node.name, "usage")
         result = get_guidance(self.registry, ["cpu"])
         self.assertIn("usage", result.next_options)
         self.assertIn("core-count", result.next_options)
@@ -367,8 +371,9 @@ class TestFullRegistry(unittest.TestCase):
         self.assertIn("not yet implemented", captured.getvalue())
 
     def test_guidance_on_full_registry_cpu(self) -> None:
+        # cpu has subcommands — must show guidance, not execute
         result = get_guidance(self.registry, ["cpu"])
-        self.assertTrue(result.is_executable)
+        self.assertFalse(result.is_executable)
         self.assertIn("usage", result.next_options)
 
     def test_guidance_on_full_registry_delete_shows_subcommands(self) -> None:

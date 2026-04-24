@@ -7,7 +7,7 @@ Supported usage:
     ixx check <file.ixx>      parse only — report syntax errors, no execution
     ixx version               print the IXX version
     ixx help                  print help overview
-    ixx shell                 placeholder — shell is planned
+    ixx shell                 open the interactive shell
 """
 
 from __future__ import annotations
@@ -29,7 +29,8 @@ Usage:
   ixx check <file.ixx>    check syntax without running
   ixx version             print the IXX version
   ixx help                show this help
-  ixx shell               open the IXX interactive shell (planned)
+  ixx                     open the IXX interactive shell
+  ixx shell               open the IXX interactive shell
 
 Language quick-reference:
   say "Hello World"

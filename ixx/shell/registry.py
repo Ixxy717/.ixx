@@ -40,6 +40,7 @@ class CommandNode:
     examples: list[str] = field(default_factory=list)
     destructive: bool = False
     requires_admin: bool = False
+    warning_text: str = ""      # overrides the generic destructive warning in hints
     handler: Callable[..., None] | None = None  # None = not yet implemented
 
     def is_leaf(self) -> bool:

@@ -83,7 +83,10 @@ def show_hints(result: GuidanceResult) -> None:
             print(f"    {ex}")
 
     if result.destructive:
-        print(f"\n  {_c(_YELLOW, 'Warning: this command can delete or modify files.')}")
+        node = result.matched_node
+        text = (node.warning_text if node and node.warning_text
+                else "this command can delete or modify files.")
+        print(f"\n  {_c(_YELLOW, f'Warning: {text}')}")
 
     if result.requires_admin:
         print(f"  {_c(_YELLOW, 'Note: may require administrator / root privileges.')}")
@@ -135,6 +138,22 @@ def _show_broad_help(registry: CommandRegistry) -> None:
     print(_c(_DIM, "  Type 'help <command>' for details."))
     print(_c(_DIM, "  Type 'exit' or 'quit' to leave the shell."))
     print()
+    print(_c(_DIM, "  Examples:"))
+    _BROAD_EXAMPLES = [
+        "ip",
+        "ip wifi",
+        "cpu",
+        "cpu core-count",
+        "disk health",
+        "folder size downloads",
+        "open desktop",
+        'find file "invoice"',
+        "copy report.pdf to desktop",
+        "delete folder old-stuff recursive",
+    ]
+    for ex in _BROAD_EXAMPLES:
+        print(f"    {ex}")
+    print()
 
 
 def _show_node_help(node: CommandNode) -> None:
@@ -160,7 +179,8 @@ def _show_node_help(node: CommandNode) -> None:
         print()
 
     if node.destructive:
-        print(_c(_YELLOW, "  Warning: destructive — will prompt before acting."))
+        text = node.warning_text or "destructive — will prompt before acting."
+        print(_c(_YELLOW, f"  Warning: {text}"))
         print()
 
     if node.requires_admin:
