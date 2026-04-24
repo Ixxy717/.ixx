@@ -4,6 +4,24 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.1] — Display consistency patch
+
+### Fixed
+
+- `write` and `append` now use IXX display formatting for all non-text values.
+  Previously, writing `YES`, `NO`, or `nothing` to a file produced Python
+  representations (`True`, `False`, `None`). Now `write "f.txt", YES` writes
+  `YES`, `write "f.txt", NO` writes `NO`, and `write "f.txt", nothing` writes
+  `nothing`. `append` behaves the same way.
+
+### Tests
+
+- Added 6 `TestFileIO` assertions: write YES/NO/nothing then read back, and
+  append YES/NO/nothing round-trips.
+- 478 unit tests passing, 29 skipped.
+
+---
+
 ## [0.6.0] — File I/O and error handling
 
 ### Added
