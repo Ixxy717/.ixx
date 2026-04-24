@@ -4,6 +4,63 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.4.0] — Release v0.4.0
+
+### Added
+
+**Function system**
+- `function name [params]` — define user functions with optional comma-separated parameters
+- `return [expr]` — return a value from a function; returns `nothing` if omitted
+- Expression-position calls require parentheses: `total = add(5, 3)`
+- Statement-position calls use space-style: `greet "World"` / `divider`
+- Two-pass collection: functions can be called before they are defined in the file
+- Clean local scoping via `FunctionEnvironment` — local writes never leak to global scope
+- Call depth limit of 100 with a friendly error (catches Python `RecursionError` too)
+
+**Built-ins (v0.4 set)**
+- `count(x)` — length of a list or string
+- `text(x)` — convert any value to its text representation
+- `number(x)` — convert text/number to number; friendly error on invalid input
+- `ask(prompt)` — read a line of user input
+- `type(x)` — returns IXX words: `text`, `number`, `yes/no`, `list`, `nothing`
+
+**Terminal color support**
+- `NO_COLOR` and `IXX_COLOR=0/1` env-var support
+- `show_error()` in red, `show_success()` in green
+- Windows Virtual Terminal Processing enabled for both stdout and stderr
+- `examples/colors.ixx` — visual color test with PowerShell and CMD instructions
+
+**Demo improvements**
+- `ixx demo interactive` — step-by-step guided walkthrough with live code execution
+- `try-it.ixx` rewritten to demonstrate v0.4 language features
+
+**New examples**
+- `examples/functions.ixx` — function basics, parameters, return, recursion, built-ins
+- `examples/colors.ixx` — terminal color env-var test
+- `examples/FunctionStressReal.ixx` — comprehensive function stress test
+
+**Documentation**
+- `spec/language.md` — full Functions section, built-ins table, updated reserved words
+- `spec/roadmap.md` — v0.4 marked complete; v0.5–v0.7 sections written and deferred
+
+### Fixed
+
+- **UTF-8 BOM** (`\ufeff`) at start of `.ixx` files now stripped in preprocessor
+- **Keyword-prefix identifier bug** — function names like `return_list`, `is_valid`, `not_empty`, `contains_check` previously caused a lexer error; all 11 priority keyword terminals now carry negative lookahead `(?![A-Za-z0-9_])`
+- Preprocessor strips blank lines to prevent spurious `_DEDENT` tokens in blocks
+- Loop iteration limit of 10,000 with friendly error
+- `YES`/`NO` blocked from arithmetic and relational comparisons
+- Undefined string interpolation → `{?name}` with stderr warning
+- `contains` type-mismatch warns on stderr
+
+### Packaging
+
+- `pyproject.toml`: excluded root `assets/` dev scripts and `tests/` from wheel
+- Wheel contents: only `ixx/` package files + `ixx/assets/` runtime data
+- 400 tests passing, 29 skipped (v0.5 placeholders)
+
+---
+
 ## [0.3.0] — v0.3.0-system-commands
 
 First real-usefulness release. Shell commands now actually work on Windows.
