@@ -1,11 +1,15 @@
-$ErrorActionPreference = "Continue"
+﻿$ErrorActionPreference = "Continue"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $ScriptDir
 Set-Location $Root
 
-$Pass = 0
-$Fail = 0
+$FilePass = 0
+$FileFail = 0
+$AssertPass = 0
+$AssertFail = 0
+$ExpectedPass = 0
+$ExpectedFail = 0
 
 function Write-Header($Text) {
     Write-Host ""
@@ -14,16 +18,28 @@ function Write-Header($Text) {
     Write-Host "========================================"
 }
 
-function Add-Pass {
-    param([string]$Name)
-    $script:Pass += 1
-    Write-Host "PASS: $Name" -ForegroundColor Green
+function Count-Assertions($Output) {
+    foreach ($Line in $Output) {
+        $Text = [string]$Line
+        if ($Text -match '^PASS ') {
+            $script:AssertPass += 1
+        }
+        if ($Text -match '^FAIL ') {
+            $script:AssertFail += 1
+        }
+    }
 }
 
-function Add-Fail {
+function Add-FilePass {
     param([string]$Name)
-    $script:Fail += 1
-    Write-Host "FAIL: $Name" -ForegroundColor Red
+    $script:FilePass += 1
+    Write-Host "FILE PASS: $Name" -ForegroundColor Green
+}
+
+function Add-FileFail {
+    param([string]$Name)
+    $script:FileFail += 1
+    Write-Host "FILE FAIL: $Name" -ForegroundColor Red
 }
 
 function Run-Positive {
@@ -31,18 +47,25 @@ function Run-Positive {
 
     Write-Host ""
     Write-Host "[CHECK] $File" -ForegroundColor Cyan
-    & ixx check $File
-    if ($LASTEXITCODE -ne 0) {
-        Add-Fail "$File check"
+    $checkOut = & ixx check $File 2>&1
+    $checkCode = $LASTEXITCODE
+    $checkOut | ForEach-Object { Write-Host $_ }
+
+    if ($checkCode -ne 0) {
+        Add-FileFail "$File check"
         return
     }
 
     Write-Host "[RUN] $File" -ForegroundColor Cyan
-    & ixx $File
-    if ($LASTEXITCODE -ne 0) {
-        Add-Fail "$File run"
+    $runOut = & ixx $File 2>&1
+    $runCode = $LASTEXITCODE
+    $runOut | ForEach-Object { Write-Host $_ }
+    Count-Assertions $runOut
+
+    if ($runCode -ne 0) {
+        Add-FileFail "$File run"
     } else {
-        Add-Pass $File
+        Add-FilePass $File
     }
 }
 
@@ -51,11 +74,16 @@ function Run-ExpectedFail {
 
     Write-Host ""
     Write-Host "[EXPECTED FAIL] $File" -ForegroundColor Yellow
-    & ixx $File
-    if ($LASTEXITCODE -ne 0) {
-        Add-Pass "$File expected failure"
+    $out = & ixx $File 2>&1
+    $code = $LASTEXITCODE
+    $out | ForEach-Object { Write-Host $_ }
+
+    if ($code -ne 0) {
+        $script:ExpectedPass += 1
+        Write-Host "EXPECTED PASS: $File failed as expected" -ForegroundColor Green
     } else {
-        Add-Fail "$File should have failed"
+        $script:ExpectedFail += 1
+        Write-Host "EXPECTED FAIL: $File should have failed" -ForegroundColor Red
     }
 }
 
@@ -64,7 +92,7 @@ if (-not (Get-Command ixx -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-New-Item -ItemType Directory -Force -Path "StressTest\tmp" | Out-Null
+if (Test-Path "StressTest\tmp") { Remove-Item "StressTest\tmp" -Recurse -Force }; New-Item -ItemType Directory -Force -Path "StressTest\tmp" | Out-Null
 
 [System.IO.File]::WriteAllText(
     (Join-Path $Root "StressTest\tmp\readlines-fixture.txt"),
@@ -77,43 +105,33 @@ Write-Header "IXX StressTest"
 & ixx version
 & ixx StressTest\main.ixx
 
-$Positive = @(
-    "StressTest\01-basics.ixx",
-    "StressTest\02-functions.ixx",
-    "StressTest\03-builtins-text.ixx",
-    "StressTest\04-builtins-math.ixx",
-    "StressTest\05-builtins-lists.ixx",
-    "StressTest\06-files.ixx",
-    "StressTest\07-try-catch.ixx",
-    "StressTest\08-scope.ixx",
-    "StressTest\09-color.ixx"
-)
+$Positive = Get-ChildItem "StressTest" -Filter "*.ixx" |
+    Where-Object { $_.Name -match '^\d\d-.+\.ixx$' } |
+    Sort-Object Name
 
-foreach ($File in $Positive) {
-    Run-Positive $File
+foreach ($Item in $Positive) {
+    Run-Positive $Item.FullName
 }
 
-$ExpectedFailures = @(
-    "StressTest\ExpectedFailures\bad-syntax-missing-value.ixx",
-    "StressTest\ExpectedFailures\bad-return-outside-function.ixx",
-    "StressTest\ExpectedFailures\bad-bool-math.ixx",
-    "StressTest\ExpectedFailures\bad-number-conversion.ixx",
-    "StressTest\ExpectedFailures\bad-undefined-variable.ixx",
-    "StressTest\ExpectedFailures\bad-file-read.ixx"
-)
+$ExpectedFailures = Get-ChildItem "StressTest\ExpectedFailures" -Filter "*.ixx" |
+    Sort-Object Name
 
-foreach ($File in $ExpectedFailures) {
-    Run-ExpectedFail $File
+foreach ($Item in $ExpectedFailures) {
+    Run-ExpectedFail $Item.FullName
 }
 
 Write-Host ""
 Write-Host "========================================"
 Write-Host "StressTest complete"
-Write-Host "PASS: $Pass" -ForegroundColor Green
-Write-Host "FAIL: $Fail" -ForegroundColor Red
+Write-Host "FILE PASS: $FilePass" -ForegroundColor Green
+Write-Host "FILE FAIL: $FileFail" -ForegroundColor Red
+Write-Host "ASSERT PASS: $AssertPass" -ForegroundColor Green
+Write-Host "ASSERT FAIL: $AssertFail" -ForegroundColor Red
+Write-Host "EXPECTED FAIL PASS: $ExpectedPass" -ForegroundColor Green
+Write-Host "EXPECTED FAIL FAIL: $ExpectedFail" -ForegroundColor Red
 Write-Host "========================================"
 
-if ($Fail -gt 0) {
+if ($FileFail -gt 0 -or $AssertFail -gt 0 -or $ExpectedFail -gt 0) {
     exit 1
 }
 

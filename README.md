@@ -32,11 +32,14 @@ ixx> downloads size
 ## Quick start
 
 ```
-pip install lark
-pip install -e .
+pip install ixx
 ```
 
 Then `ixx` is a command in your terminal.
+
+```
+pip install --upgrade ixx
+```
 
 ---
 
@@ -167,6 +170,9 @@ if user is "Ixxy"
 | `ixx` | open the interactive shell |
 | `ixx shell` | open the interactive shell |
 | `ixx do "ip wifi"` | run one shell command and exit |
+| `ixx demo` | run the bundled demo script |
+| `ixx demo interactive` | step-by-step interactive walkthrough |
+| `ixx setup` | register `.ixx` file type and icon on Windows |
 
 ---
 
@@ -347,10 +353,9 @@ To associate `.ixx` files with the IXX icon on Windows, see
 ## Current limitations
 
 - Requires Python 3.11+ and the `lark` library.
-- No functions, file I/O, or imports yet.
 - Variable names must be single words (no spaces).
-- Reserved words cannot be used as variable names: `if`, `else`, `loop`, `say`, `and`, `or`, `not`, `is`, `less`, `more`, `than`, `at`, `least`, `most`, `contains`, `YES`, `NO`.
-- Shell system commands are Windows-first in v0.3.0; Linux/macOS adapters are planned.
+- String literals do not process escape sequences (`"\n"` is literally backslash-n).
+- Shell system commands are Windows-first; Linux/macOS adapters are planned.
 - Destructive commands (`delete`, `kill process`, `copy`, `move`) exist in the guidance tree but do not execute yet.
 
 ---
@@ -367,13 +372,30 @@ The long-term goal is a standalone IXX binary that requires nothing else to be i
 
 ## Tests
 
-The prototype ships with a full automated test suite.
+The prototype ships with two test suites.
+
+### Python unit tests
 
 ```
 python -m unittest discover -s tests -p "test*.py"
 ```
 
-**282 tests passing** across: language basics, strings, numbers, booleans, conditions, dash blocks, loops, lists, comparisons, `contains`, logic, error handling, CLI commands, shell guidance, command handlers, path aliases, format helpers, banner, and new system commands.
+**478 tests passing** across: language basics, strings, numbers, booleans, conditions, dash blocks, loops, lists, comparisons, `contains`, logic, functions, built-ins (text/math/lists/color/file I/O), `try`/`catch`, `nothing`, scoping, error handling, CLI commands, shell guidance, command handlers, path aliases, format helpers, and system commands.
+
+### End-to-end StressTest suite
+
+```
+StressTest\run-all.cmd
+```
+
+A manual CLI suite that runs 30 positive `.ixx` stress tests plus 12 ExpectedFailure scripts against the installed `ixx` command. Tests cover every language feature end-to-end. Temp files are written to `StressTest\tmp\` and cleaned between runs.
+
+**Release gate:** both suites must pass before publishing a new version:
+
+| Suite | Expected result |
+|---|---|
+| `python -m unittest discover` | 0 failures, 0 errors |
+| `StressTest\run-all.cmd` | FILE FAIL: 0 / ASSERT FAIL: 0 / EXPECTED FAIL FAIL: 0 |
 
 ---
 
@@ -382,9 +404,10 @@ python -m unittest discover -s tests -p "test*.py"
 ```
 ixx/            prototype interpreter (Python)
 examples/       example .ixx scripts
-spec/           language spec, shell design, roadmap
+spec/           language spec, shell design, roadmap, dictionary
 docs/           getting started guide
-tests/          automated tests
+tests/          Python unit test suite
+StressTest/     end-to-end CLI stress suite (run-all.cmd)
 assets/         icon source and generate_icons.py script
   generated/    generated PNG sizes and ixx-icon.ico
 editor/         syntax highlighting and file association
@@ -399,6 +422,7 @@ CHANGELOG.md    version history
 ## More
 
 - [`spec/language.md`](spec/language.md) — full language reference
+- [`spec/dictionary.md`](spec/dictionary.md) — complete IXX language dictionary (syntax, built-ins, shell commands, types)
 - [`spec/shell.md`](spec/shell.md) — planned interactive shell design
 - [`spec/roadmap.md`](spec/roadmap.md) — where IXX is going
 - [`docs/getting-started.md`](docs/getting-started.md) — step by step setup
