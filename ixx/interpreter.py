@@ -290,8 +290,25 @@ _COLOR_CODES: dict[str, str] = {
 _COLOR_RESET = "\033[0m"
 
 
+def _try_enable_win_vtp() -> None:
+    """Enable Windows Virtual Terminal Processing for stdout so ANSI codes render."""
+    import os
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        import ctypes.wintypes
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        mode = ctypes.wintypes.DWORD()
+        handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+        if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            kernel32.SetConsoleMode(handle, mode.value | 0x0004)
+    except Exception:
+        pass
+
+
 def _ansi_enabled() -> bool:
-    """Return True if ANSI is currently enabled (checks env vars, tty)."""
+    """Return True if ANSI is currently enabled (checks env vars, tty, enables VTP)."""
     import os, sys
     if os.environ.get("NO_COLOR", ""):
         return False
@@ -299,8 +316,12 @@ def _ansi_enabled() -> bool:
     if ixx_color == "0":
         return False
     if ixx_color == "1":
+        _try_enable_win_vtp()
         return True
-    return sys.stdout.isatty()
+    if not sys.stdout.isatty():
+        return False
+    _try_enable_win_vtp()
+    return True
 
 
 def _builtin_color(color_name: IXXValue, text_val: IXXValue) -> str:

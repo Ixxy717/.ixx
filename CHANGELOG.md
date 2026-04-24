@@ -4,6 +4,14 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.5.2] — color() ANSI fix on Windows CMD
+
+### Fixed
+
+- **`color()` showing raw escape codes on Windows CMD** — the built-in's ANSI check now calls `SetConsoleMode` to enable Virtual Terminal Processing before emitting escape codes, the same way the shell renderer does. Running `ixx script.ixx` from CMD will now show actual colors instead of `←[32m...←[0m`.
+
+---
+
 ## [0.5.1] — Error message cleanup
 
 ### Fixed
