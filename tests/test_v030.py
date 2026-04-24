@@ -301,6 +301,42 @@ class TestGuidanceExecutableWithChildren(unittest.TestCase):
 # Command handler tests (mocked platform)
 # ---------------------------------------------------------------------------
 
+class TestAdapterClassification(unittest.TestCase):
+
+    def setUp(self) -> None:
+        from ixx.shell.commands.network import _classify_adapter
+        self.classify = _classify_adapter
+
+    def test_loopback(self) -> None:
+        self.assertEqual(self.classify("Loopback", "127.0.0.1"), "loopback")
+
+    def test_link_local(self) -> None:
+        self.assertEqual(self.classify("Local Area Connection", "169.254.16.80"), "link-local")
+
+    def test_vpn_by_name(self) -> None:
+        self.assertEqual(self.classify("NordLynx", "10.5.0.2"), "vpn")
+        self.assertEqual(self.classify("OpenVPN Data Channel Offload", "10.100.0.2"), "vpn")
+        self.assertEqual(self.classify("Tailscale", "100.127.28.64"), "vpn")
+
+    def test_virtual_by_name(self) -> None:
+        self.assertEqual(self.classify("vEthernet (WSL)", "172.27.64.1"), "virtual")
+        self.assertEqual(self.classify("VMware Network Adapter VMnet8", "192.168.168.1"), "virtual")
+
+    def test_virtual_by_ip(self) -> None:
+        # VirtualBox host-only range
+        self.assertEqual(self.classify("Ethernet", "192.168.56.1"), "virtual")
+
+    def test_wifi_by_name(self) -> None:
+        self.assertEqual(self.classify("Wi-Fi", "192.168.1.10"), "wifi")
+        self.assertEqual(self.classify("Wireless Network Connection", "192.168.1.11"), "wifi")
+
+    def test_ethernet_by_name(self) -> None:
+        self.assertEqual(self.classify("Ethernet 4", "192.168.1.46"), "ethernet")
+
+    def test_other(self) -> None:
+        self.assertEqual(self.classify("Some Unknown Adapter", "10.0.0.1"), "other")
+
+
 class TestCommandHandlers(unittest.TestCase):
     """Test command handlers with the platform adapter mocked out."""
 
@@ -349,6 +385,59 @@ class TestCommandHandlers(unittest.TestCase):
             out = self._capture(handle_ip, [])
         self.assertIn("192.168.1.42", out)
         self.assertIn("Wi-Fi", out)
+
+    def test_ip_shows_primary_section(self) -> None:
+        """handle_ip should show 'Primary IP' for ethernet/wifi adapters."""
+        from ixx.shell.commands.network import handle_ip
+        adapter = self._mock_adapter()
+        with patch("ixx.shell.platform.current", return_value=adapter):
+            out = self._capture(handle_ip, [])
+        self.assertIn("Primary IP", out)
+
+    def test_ip_filters_link_local(self) -> None:
+        """handle_ip should not show 169.254.x.x in primary when a real IP exists."""
+        from ixx.shell.commands.network import handle_ip
+        from unittest.mock import MagicMock
+        adapter = MagicMock()
+        adapter.get_ip_info.return_value = [
+            {"adapter": "Ethernet 4",            "ipv4": "192.168.1.46"},
+            {"adapter": "Local Area Connection", "ipv4": "169.254.16.80"},
+        ]
+        with patch("ixx.shell.platform.current", return_value=adapter):
+            out = self._capture(handle_ip, [])
+        self.assertIn("192.168.1.46", out)
+        # The link-local address should not appear in the filtered default view
+        self.assertNotIn("169.254.16.80", out)
+
+    def test_ip_all_shows_everything(self) -> None:
+        """handle_ip_all shows unfiltered table including link-local."""
+        from ixx.shell.commands.network import handle_ip_all
+        from unittest.mock import MagicMock
+        adapter = MagicMock()
+        adapter.get_ip_info.return_value = [
+            {"adapter": "Wi-Fi",                "ipv4": "192.168.1.42"},
+            {"adapter": "Local Area Connection", "ipv4": "169.254.16.80"},
+            {"adapter": "NordLynx",              "ipv4": "10.5.0.2"},
+        ]
+        with patch("ixx.shell.platform.current", return_value=adapter):
+            out = self._capture(handle_ip_all, [])
+        self.assertIn("192.168.1.42", out)
+        self.assertIn("169.254.16.80", out)
+        self.assertIn("10.5.0.2", out)
+
+    def test_ip_local_skips_link_local(self) -> None:
+        """handle_ip_local should exclude 169.254.x.x addresses."""
+        from ixx.shell.commands.network import handle_ip_local
+        from unittest.mock import MagicMock
+        adapter = MagicMock()
+        adapter.get_ip_info.return_value = [
+            {"adapter": "Ethernet 4",            "ipv4": "192.168.1.46"},
+            {"adapter": "Local Area Connection", "ipv4": "169.254.16.80"},
+        ]
+        with patch("ixx.shell.platform.current", return_value=adapter):
+            out = self._capture(handle_ip_local, [])
+        self.assertIn("192.168.1.46", out)
+        self.assertNotIn("169.254.16.80", out)
 
     def test_ip_wifi_found(self) -> None:
         from ixx.shell.commands.network import handle_ip_wifi

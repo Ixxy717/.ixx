@@ -20,6 +20,7 @@ from ..renderer import show_not_implemented
 from .hardware import handle_cpu, handle_cpu_cores, handle_ram
 from .network import (
     handle_ip,
+    handle_ip_all,
     handle_ip_wifi,
     handle_ip_ethernet,
     handle_ip_local,
@@ -163,8 +164,8 @@ def _build_ip() -> CommandNode:
         subcommands={
             "all": CommandNode(
                 "all",
-                description="All active IPs",
-                handler=handle_ip,
+                description="All active IPs (unfiltered)",
+                handler=handle_ip_all,
             ),
             "wifi": CommandNode(
                 "wifi",
