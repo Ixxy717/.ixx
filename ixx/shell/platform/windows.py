@@ -444,11 +444,43 @@ def get_ram_speed() -> dict:
 # GPU
 # ---------------------------------------------------------------------------
 
+def _get_nvidia_vram_mb() -> dict[str, int]:
+    """Return {gpu_name_lower: vram_mib} for all NVIDIA GPUs via nvidia-smi.
+
+    Returns an empty dict if nvidia-smi is not available or fails.
+    nvidia-smi is installed automatically with NVIDIA drivers on Windows.
+    """
+    raw = run_command(
+        ["nvidia-smi",
+         "--query-gpu=name,memory.total",
+         "--format=csv,noheader,nounits"],
+        timeout=10,
+    )
+    result: dict[str, int] = {}
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line or "," not in line:
+            continue
+        parts = line.split(",", 1)
+        if len(parts) == 2:
+            name = parts[0].strip()
+            try:
+                mib = int(parts[1].strip())
+                result[name.lower()] = mib
+            except ValueError:
+                pass
+    return result
+
+
 def get_gpu_info() -> list[dict]:
     """Return info for all detected video controllers.
 
     Returns:
         [{"name": str, "vram_bytes": int, "driver": str}, ...]
+
+    AdapterRAM from Win32_VideoController is a 32-bit field that caps at
+    ~4 GB regardless of actual VRAM.  For NVIDIA GPUs we cross-check with
+    nvidia-smi (bundled with all NVIDIA drivers) which reports the true value.
     """
     raw = _ps(
         "Get-CimInstance Win32_VideoController "
@@ -456,17 +488,33 @@ def get_gpu_info() -> list[dict]:
         "| ConvertTo-Json -Compress"
     )
     items = _parse_json(raw)
+
+    # Fetch nvidia-smi data once; use it to fix capped VRAM for NVIDIA cards.
+    nvidia_vram = _get_nvidia_vram_mb()
+
     results = []
     for item in items:
         name = (item.get("Name") or "").strip()
         if not name:
             continue
-        vram = item.get("AdapterRAM") or 0
         driver = (item.get("DriverVersion") or "unavailable").strip()
+
+        vram = item.get("AdapterRAM") or 0
         try:
             vram = int(vram)
         except (TypeError, ValueError):
             vram = 0
+
+        # AdapterRAM overflows at 2^32 bytes for GPUs > 4 GB.
+        # If we have a better reading from nvidia-smi, prefer it.
+        if nvidia_vram:
+            name_lower = name.lower()
+            for smi_name, smi_mib in nvidia_vram.items():
+                # Match on any overlapping token (e.g. "rtx 4070 super")
+                if any(tok in name_lower for tok in smi_name.split() if len(tok) > 3):
+                    vram = smi_mib * 1024 * 1024
+                    break
+
         results.append({"name": name, "vram_bytes": vram, "driver": driver})
     return results
 
