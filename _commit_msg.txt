@@ -1,0 +1,20 @@
+v0.2.0-dev: shell skeleton with guidance engine
+
+Working interactive shell (ixx shell / bare ixx). The command grammar
+is a data-driven tree — no hardcoded string matching. All 18 commands
+from spec/shell.md are seeded as stubs, ready for real OS integration
+in v0.3.0.
+
+New files:
+- shell/registry.py     CommandNode dataclass + CommandRegistry
+- shell/guidance.py     get_guidance() tree-walker
+- shell/renderer.py     all REPL output formatting
+- shell/repl.py         interactive loop, dispatch, help, fuzzy correction
+- shell/commands/stubs.py  18 stubbed commands with full metadata
+
+Updated:
+- ixx/__main__.py       ixx / ixx shell now launch the real REPL
+- tests/test_ixx.py     shell test updated; cli() gets timeout + DEVNULL stdin
+- tests/test_shell.py   54 new tests (152 total, all passing)
+- CHANGELOG.md          v0.2.0-dev entry
+- spec/roadmap.md       Phase 0 complete, Phase 2 in progress

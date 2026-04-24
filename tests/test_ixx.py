@@ -47,6 +47,8 @@ def cli(*args: str) -> tuple[int, str]:
         [sys.executable, "-m", "ixx", *args],
         capture_output=True,
         text=True,
+        stdin=subprocess.DEVNULL,
+        timeout=15,
         cwd=str(ROOT),
     )
     combined = (result.stdout + result.stderr).strip()
@@ -512,10 +514,19 @@ class TestCLI(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertIn("not found", out)
 
-    def test_shell_placeholder(self):
-        code, out = cli("shell")
-        self.assertEqual(code, 0)
-        self.assertIn("planned", out)
+    def test_shell_opens_repl(self):
+        # Send "exit" so the REPL closes immediately
+        result = subprocess.run(
+            [sys.executable, "-m", "ixx", "shell"],
+            capture_output=True,
+            text=True,
+            input="exit\n",
+            cwd=str(ROOT),
+            timeout=10,
+        )
+        self.assertEqual(result.returncode, 0)
+        combined = (result.stdout + result.stderr).strip()
+        self.assertIn("IXX Shell", combined)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

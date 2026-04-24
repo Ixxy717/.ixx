@@ -4,9 +4,9 @@ This document tracks the phases of IXX development from the current Python proto
 
 ---
 
-## Phase 0 — Python prototype (current)
+## Phase 0 — Python prototype
 
-**Status:** active
+**Status:** complete (tagged v0.1.0)
 
 The IXX interpreter is written in Python using the Lark parser library.
 
@@ -68,7 +68,7 @@ What Phase 1 adds:
 
 ## Phase 2 — Interactive shell and REPL
 
-**Goal:** `ixx shell` opens a working interactive console.
+**Status:** in progress (branch: `v0.2.0-shell-planning`)
 
 What Phase 2 adds:
 - `ixx shell` / `ixx repl` opens an interactive prompt.

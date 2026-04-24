@@ -1,0 +1,88 @@
+"""
+IXX Shell — Guidance Engine
+
+Given a list of tokens the user has typed so far, the engine walks the
+CommandRegistry tree and returns everything the shell needs to either
+display hints or dispatch a command.
+
+Usage:
+    result = get_guidance(registry, ["disk", "health"])
+    if result.is_executable:
+        result.matched_node.handler(result.remaining_args)
+    else:
+        renderer.show_hints(result)
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from .registry import CommandNode, CommandRegistry
+
+
+@dataclass
+class GuidanceResult:
+    """Everything derived from walking the command tree for a given input."""
+
+    matched_node: CommandNode | None = None
+    next_options: list[str] = field(default_factory=list)
+    arg_hint: str = ""
+    examples: list[str] = field(default_factory=list)
+    is_executable: bool = False
+    destructive: bool = False
+    requires_admin: bool = False
+    remaining_args: list[str] = field(default_factory=list)
+    # How many tokens were consumed while walking the tree
+    depth: int = 0
+
+
+def get_guidance(registry: CommandRegistry, tokens: list[str]) -> GuidanceResult:
+    """Walk the command tree and return a GuidanceResult for *tokens*.
+
+    Handles these cases:
+    - Empty input           → list all top-level commands as next_options
+    - Unknown first token   → empty result (caller uses registry.suggest())
+    - Partial path          → next_options = subcommand names at current node
+    - Complete path (leaf)  → is_executable=True, remaining_args = leftover tokens
+    - Node has both sub-    → is_executable=True AND next_options populated
+      commands and a handler
+    """
+    if not tokens:
+        return GuidanceResult(
+            next_options=registry.root_names(),
+        )
+
+    # Walk the tree
+    node = registry.get(tokens[0])
+    if node is None:
+        return GuidanceResult()  # unknown command
+
+    depth = 1
+    for tok in tokens[1:]:
+        child = node.subcommands.get(tok)
+        if child is None:
+            # Token doesn't match a subcommand — remaining tokens are free args
+            break
+        node = child
+        depth += 1
+
+    remaining = tokens[depth:]
+
+    # Determine executability:
+    # A node is executable if it has a handler OR it has an arg_hint
+    # (meaning it accepts free-form arguments like a path).
+    has_handler = node.handler is not None
+    has_arg_hint = bool(node.arg_hint)
+    executable = has_handler or has_arg_hint
+
+    return GuidanceResult(
+        matched_node=node,
+        next_options=list(node.subcommands.keys()),
+        arg_hint=node.arg_hint,
+        examples=node.examples,
+        is_executable=executable,
+        destructive=node.destructive,
+        requires_admin=node.requires_admin,
+        remaining_args=remaining,
+        depth=depth,
+    )

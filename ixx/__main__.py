@@ -229,7 +229,8 @@ def main() -> None:
     args = sys.argv[1:]
 
     if not args:
-        print(HELP_TEXT)
+        from shell.repl import run as _run_shell
+        _run_shell()
         return
 
     cmd = args[0]
@@ -246,8 +247,8 @@ def main() -> None:
 
     # --- ixx shell ---
     if cmd == "shell":
-        print("ixx: the interactive shell is planned for a future release.")
-        print("     Run scripts with:  ixx <file.ixx>")
+        from shell.repl import run as _run_shell
+        _run_shell()
         return
 
     # --- ixx run <file> ---

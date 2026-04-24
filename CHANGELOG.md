@@ -4,6 +4,60 @@ All notable changes to IXX are documented here.
 
 ---
 
+---
+
+## [0.2.0-dev] — in progress (branch: v0.2.0-shell-planning)
+
+Interactive shell skeleton. The REPL is live and the guidance engine is
+fully working. No real OS commands yet — those come in v0.3.0.
+
+### Added
+
+- **`ixx shell`** — opens the IXX interactive shell (was a placeholder; now a real REPL)
+- **`ixx`** (no arguments) — also opens the shell, per spec
+- **`shell/registry.py`** — `CommandNode` dataclass and `CommandRegistry`; the entire command grammar lives here as pure data, with no hardcoded string matching
+- **`shell/guidance.py`** — `get_guidance()` engine; walks the command tree and returns valid next options, executability, examples, and safety flags
+- **`shell/renderer.py`** — all REPL output formatting: hints, help, warnings, fuzzy-correction messages
+- **`shell/repl.py`** — main interactive loop with tokenizer, dispatch, `help` / `?` support, fuzzy correction, and clean Ctrl-C / Ctrl-D / EOF exit
+- **`shell/commands/stubs.py`** — 18 commands seeded with full metadata and stub handlers: `cpu`, `ram`, `gpu`, `disk`, `network`, `ip`, `wifi`, `ports`, `processes`, `kill`, `folder`, `find`, `open`, `list`, `copy`, `move`, `delete`, `native`
+
+### Tests
+
+- **`tests/test_shell.py`** — 54 new tests covering registry, guidance engine, tokenizer, fuzzy correction, stub handlers, and full-registry smoke tests
+- **Total: 152 tests passing** (98 language + 54 shell)
+
+### Shell behavior
+
+Typing an incomplete command shows guidance:
+```
+ixx> delete
+  file        Delete a single file
+  folder      Delete a folder [recursive] [force] [dry-run]
+  temp        Clean temporary files
+  empty-trash Empty the recycle bin / trash
+```
+
+Typing a complete command runs the stub:
+```
+ixx> cpu usage
+  [cpu usage  -  not yet implemented, coming in v0.3.0]
+```
+
+Typing something wrong fuzzy-corrects:
+```
+ixx> cpoy
+  Unknown command: cpoy
+  Did you mean: copy  |  cpu?
+```
+
+### Known limitations
+
+- All system commands are stubs (no real OS integration yet)
+- No inline autocomplete while typing (keystroke-level guidance is v0.3.0)
+- No `ixx do "command"` yet
+
+---
+
 ## [0.1.0] — 2026-04-23
 
 First stable language prototype. The grammar, interpreter, and CLI are all in place and covered by an automated test suite.
