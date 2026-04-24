@@ -28,7 +28,7 @@ todos:
     status: completed
   - id: docs
     content: Update CHANGELOG.md and spec/roadmap.md (Phase 2 in progress)
-    status: in_progress
+    status: completed
 isProject: false
 ---
 

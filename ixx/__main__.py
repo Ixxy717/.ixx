@@ -229,7 +229,7 @@ def main() -> None:
     args = sys.argv[1:]
 
     if not args:
-        from shell.repl import run as _run_shell
+        from .shell.repl import run as _run_shell
         _run_shell()
         return
 
@@ -247,7 +247,7 @@ def main() -> None:
 
     # --- ixx shell ---
     if cmd == "shell":
-        from shell.repl import run as _run_shell
+        from .shell.repl import run as _run_shell
         _run_shell()
         return
 

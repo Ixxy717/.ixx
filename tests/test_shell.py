@@ -13,10 +13,10 @@ import sys
 import unittest
 from unittest.mock import patch
 
-from shell.registry import CommandNode, CommandRegistry
-from shell.guidance import GuidanceResult, get_guidance
-from shell.commands.stubs import register_all
-from shell.repl import _tokenize, _make_registry
+from ixx.shell.registry import CommandNode, CommandRegistry
+from ixx.shell.guidance import GuidanceResult, get_guidance
+from ixx.shell.commands.stubs import register_all
+from ixx.shell.repl import _tokenize, _make_registry
 
 
 # ---------------------------------------------------------------------------
