@@ -16,10 +16,13 @@ build/
 venv/
 env/
 
-# Editor
+# Editor / IDE
 .vscode/
+.cursor/
 *.suo
 *.user
+*.vsix
+editor/vscode.zip
 
 # Temp / scratch files
 _*.txt

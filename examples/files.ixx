@@ -1,5 +1,10 @@
 # files.ixx
 # Demonstrates IXX v0.6 file I/O built-ins and try/catch error handling.
+#
+# NOTE: This script creates two files in the current directory:
+#   ixx-demo.txt  -- used for write/read/append demonstrations
+#   ixx-log.txt   -- used for the try/catch log example
+# Both are listed in .gitignore and can be deleted freely.
 
 say "IXX v0.6 -- File I/O and Error Handling"
 say "-------------------------------------------"
@@ -73,3 +78,4 @@ say "  Type of nothing:   {status_type}"
 
 say ""
 say "Done."
+say "(ixx-demo.txt and ixx-log.txt were created in the current directory.)"

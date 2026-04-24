@@ -325,7 +325,13 @@ class TestBuiltins(unittest.TestCase):
         self.assertEqual(run('say type("hello")'), "text")
 
     def test_type_bool(self):
+        """type() returns 'bool' for YES and NO — intentional, documented IXX behaviour."""
         self.assertEqual(run('say type(YES)'), "bool")
+        self.assertEqual(run('say type(NO)'), "bool")
+
+    def test_type_nothing_literal(self):
+        """type() returns 'nothing' for the nothing literal."""
+        self.assertEqual(run('say type(nothing)'), "nothing")
 
     def test_type_list(self):
         self.assertEqual(run('items = 1, 2\nsay type(items)'), "list")
@@ -1061,6 +1067,26 @@ class TestFileIO(unittest.TestCase):
         src = f'append "{path}", "created"\ncontent = read("{path}")\nsay content'
         self.assertEqual(run(src), "created")
 
+    def test_write_bool_true_displays_YES(self):
+        src = f'write "{self._tmp}", YES\ncontent = read("{self._tmp}")\nsay content'
+        self.assertEqual(run(src), "YES")
+
+    def test_write_bool_false_displays_NO(self):
+        src = f'write "{self._tmp}", NO\ncontent = read("{self._tmp}")\nsay content'
+        self.assertEqual(run(src), "NO")
+
+    def test_write_nothing_displays_nothing(self):
+        src = f'write "{self._tmp}", nothing\ncontent = read("{self._tmp}")\nsay content'
+        self.assertEqual(run(src), "nothing")
+
+    def test_append_bool_displays_YES(self):
+        src = f'write "{self._tmp}", "start:"\nappend "{self._tmp}", YES\ncontent = read("{self._tmp}")\nsay content'
+        self.assertEqual(run(src), "start:YES")
+
+    def test_append_nothing_displays_nothing(self):
+        src = f'write "{self._tmp}", "val="\nappend "{self._tmp}", nothing\ncontent = read("{self._tmp}")\nsay content'
+        self.assertEqual(run(src), "val=nothing")
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1118,7 +1144,5 @@ class TestTryCatch(unittest.TestCase):
         self.assertEqual(run(src), "inner caught")
 
 
-if __name__ == "__main__":
-    unittest.main()
 if __name__ == "__main__":
     unittest.main()

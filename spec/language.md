@@ -367,7 +367,7 @@ In expression position they require parentheses like user-defined functions.
 | `count(x)` | list or text | number | Number of items or characters |
 | `text(x)` | any | text | Converts a value to its text representation |
 | `number(x)` | text or number | number | Converts text to a number; raises an error if conversion fails |
-| `type(x)` | any | text | Returns the IXX type name: `text`, `number`, `bool`, `list`, `nothing` |
+| `type(x)` | any | text | Returns the IXX type name: `text`, `number`, `bool`, `list`, `nothing` — `bool` is the documented name for `YES`/`NO` values |
 | `ask(prompt)` | text (optional) | text | Prompts the user for input and returns what they typed |
 
 Examples:
@@ -506,11 +506,16 @@ catch
 
 ### Scoping
 
-Variables created for the first time inside a `try` or `catch` block stay local to that block, following the same rules as `if` and `loop` blocks.
+`try` and `catch` bodies each run in a **child scope** — a fresh environment that inherits every variable from the surrounding scope.
 
-To use a value outside the block, pre-declare the variable before `try`:
+Rules:
+- **Pre-declared variables can be updated** — if a variable exists before `try`, setting it inside `try` or `catch` changes the original.
+- **New variables stay local** — a variable first introduced inside `try` or `catch` does not exist after the block ends.
+- **`error` is local to `catch`** — it is only accessible inside the `catch` block.
+- **Silent try** — `try` without `catch` swallows the error and execution continues normally after the block.
 
 ```
+# Pre-declared variable: update survives the block
 result = nothing
 try
 - result = read("data.txt")
@@ -519,6 +524,16 @@ catch
 
 if result is not nothing
 - say "Got: {result}"
+
+# New variable: does NOT survive the block
+try
+- local_only = "inside"
+say local_only   # runtime error -- not defined here
+
+# Silent try: errors are discarded, execution continues
+try
+- x = read("might-not-exist.txt")
+say "Always runs"
 ```
 
 ### Examples

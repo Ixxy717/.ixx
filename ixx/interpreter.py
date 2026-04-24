@@ -311,7 +311,7 @@ def _builtin_write(path: IXXValue, content: IXXValue) -> None:
         raise IXXRuntimeError(f"'write' expects a file path as text, not {_ixx_type_name(path)}.")
     try:
         with open(path, "w", encoding="utf-8") as f:
-            f.write(str(content))
+            f.write(_display(content))
     except PermissionError:
         raise IXXRuntimeError(f"Permission denied writing: {path}")
     except OSError as e:
@@ -323,7 +323,7 @@ def _builtin_append(path: IXXValue, content: IXXValue) -> None:
         raise IXXRuntimeError(f"'append' expects a file path as text, not {_ixx_type_name(path)}.")
     try:
         with open(path, "a", encoding="utf-8") as f:
-            f.write(str(content))
+            f.write(_display(content))
     except PermissionError:
         raise IXXRuntimeError(f"Permission denied writing: {path}")
     except OSError as e:
