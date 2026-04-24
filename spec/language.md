@@ -61,7 +61,7 @@ say "Hello, {name}"
 # prints: Hello, Ixxy
 ```
 
-If the variable is not defined, `{name}` is left as-is.
+If the variable is not defined, `{?name}` is shown in the output and a warning is printed to stderr.
 
 ### Lists
 
@@ -269,7 +269,118 @@ Variables created for the first time inside a block stay in that block.
 
 These words cannot be used as variable names:
 
-`if`, `else`, `loop`, `say`, `and`, `or`, `not`, `is`, `less`, `more`, `than`, `at`, `least`, `most`, `contains`, `YES`, `NO`
+`if`, `else`, `loop`, `say`, `and`, `or`, `not`, `is`, `less`, `more`, `than`, `at`, `least`, `most`, `contains`, `YES`, `NO`, `function`, `return`
+
+---
+
+## Functions
+
+Define a function with the `function` keyword. The body is a dash block.
+
+```
+function greet name
+- say "Hello, {name}"
+
+greet "World"
+```
+
+### Parameters
+
+Multiple parameters are comma-separated:
+
+```
+function add a, b
+- say a + b
+
+add 3, 4
+```
+
+### Return values
+
+Use `return` to return a value. Bare `return` returns `nothing`.
+
+Functions called in expression position (RHS of assignment, inside `say`,
+inside arithmetic) must use parentheses:
+
+```
+function add a, b
+- return a + b
+
+result = add(5, 3)          # expression position — parens required
+say "Result: {result}"
+
+say add(10, 2)              # expression position in say — parens required
+```
+
+Functions called as standalone statements use space-separated arguments:
+
+```
+greet "World"               # statement position — no parens needed
+countdown 5
+```
+
+### Scoping
+
+Functions have their own local scope. Local variables do not leak out to
+the calling scope. Reads can see global variables; writes are always local.
+
+```
+x = 100
+
+function show x
+- say x          # sees the parameter x, not the global
+
+show 42          # prints: 42
+say x            # prints: 100  (global unchanged)
+```
+
+### Recursion
+
+Functions may call themselves. Recursion is limited to 100 levels to
+prevent infinite recursion from hanging the program.
+
+```
+function factorial n
+- if n at most 1
+-- return 1
+- sub = factorial(n - 1)
+- return n * sub
+
+say factorial(5)             # prints: 120
+```
+
+### Forward calls
+
+The interpreter collects all function definitions in a first pass before
+executing any code. Functions defined later in the file can be called from
+earlier lines.
+
+---
+
+## Built-in functions (v0.4)
+
+Built-ins are always available. No import is needed.
+In expression position they require parentheses like user-defined functions.
+
+| Name | Arguments | Returns | Description |
+|------|-----------|---------|-------------|
+| `count(x)` | list or text | number | Number of items or characters |
+| `text(x)` | any | text | Converts a value to its text representation |
+| `number(x)` | text or number | number | Converts text to a number; raises an error if conversion fails |
+| `type(x)` | any | text | Returns the IXX type name: `text`, `number`, `bool`, `list`, `nothing` |
+| `ask(prompt)` | text (optional) | text | Prompts the user for input and returns what they typed |
+
+Examples:
+
+```
+items = "one", "two", "three"
+say count(items)              # 3
+say text(42)                  # 42
+say number("7")               # 7
+say type(YES)                 # bool
+answer = ask("Your name? ")
+say "Hello, {answer}"
+```
 
 ---
 

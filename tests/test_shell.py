@@ -397,5 +397,67 @@ class TestFullRegistry(unittest.TestCase):
         self.assertGreaterEqual(len(self.registry.root_names()), 10)
 
 
+# ---------------------------------------------------------------------------
+# Color env-var tests
+# ---------------------------------------------------------------------------
+
+class TestColorEnvVars(unittest.TestCase):
+    """Test that NO_COLOR and IXX_COLOR env vars control ANSI output."""
+
+    def _enable_ansi_with_env(self, env: dict) -> bool:
+        """Call renderer._enable_ansi() with a controlled env.
+
+        Starts from a copy of the real env, strips NO_COLOR and IXX_COLOR
+        (so tests don't inherit them from the outer shell), then applies
+        the caller's overrides.
+        """
+        import os
+        import ixx.shell.renderer as renderer
+        # Strip color-control vars so tests are hermetic
+        safe = dict(os.environ)
+        safe.pop("NO_COLOR", None)
+        safe.pop("IXX_COLOR", None)
+        safe.update(env)
+        with patch.dict("os.environ", safe, clear=True):
+            return renderer._enable_ansi()
+
+    def test_no_color_env_disables_ansi(self):
+        result = self._enable_ansi_with_env({"NO_COLOR": "1"})
+        self.assertFalse(result)
+
+    def test_no_color_empty_string_disables_ansi(self):
+        """NO_COLOR='' (empty string) still counts as set per the spec."""
+        result = self._enable_ansi_with_env({"NO_COLOR": ""})
+        self.assertFalse(result)
+
+    def test_ixx_color_0_disables_ansi(self):
+        result = self._enable_ansi_with_env({"IXX_COLOR": "0"})
+        self.assertFalse(result)
+
+    def test_ixx_color_1_forces_ansi_on(self):
+        """IXX_COLOR=1 forces ANSI on even when not a TTY (tests are not TTYs)."""
+        result = self._enable_ansi_with_env({"IXX_COLOR": "1"})
+        self.assertTrue(result)
+
+    def test_no_color_takes_priority_over_ixx_color_1(self):
+        """NO_COLOR should win even if IXX_COLOR=1 is also set."""
+        result = self._enable_ansi_with_env({"NO_COLOR": "1", "IXX_COLOR": "1"})
+        self.assertFalse(result)
+
+    def test_plain_output_readable_without_ansi(self):
+        """show_error output is readable plain text when ANSI is off."""
+        import ixx.shell.renderer as renderer
+        buf = io.StringIO()
+        # Patch _ANSI to False so no escape codes are emitted
+        with patch.object(renderer, "_ANSI", False):
+            with patch("sys.stderr", buf):
+                renderer.show_error("something went wrong")
+        output = buf.getvalue()
+        self.assertIn("Error", output)
+        self.assertIn("something went wrong", output)
+        # No ANSI escape codes in plain output
+        self.assertNotIn("\033[", output)
+
+
 if __name__ == "__main__":
     unittest.main()

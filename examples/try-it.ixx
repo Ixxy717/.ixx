@@ -1,93 +1,55 @@
-# ----------------------------------------
-# IXX try-it script
-# Run with:  ixx examples/try-it.ixx
-# ----------------------------------------
+# IXX v0.4 demo script
+# Run with: ixx demo
+# This script demonstrates the core language features available in v0.4.
 
-say "Welcome to IXX"
-say "---------------"
+# ── Variables and strings ──────────────────────────────────────────────────────
+name = "IXX"
+say "Welcome to {name}!"
 
-# --- Variables ---
+# ── Numbers and math ──────────────────────────────────────────────────────────
+x = 12
+y = 5
+say "Sum: {x} + {y} = " + text(x + y)
+say "Product: {x} * {y} = " + text(x * y)
 
-name = "World"
-say "Hello, {name}!"
-
-score = 42
-say "Your score is {score}"
-
-# --- Conditions ---
-
-say ""
-say "Checking score..."
-
-if score more than 50
-- say "High score!"
-else
-- say "Not bad, keep going"
-
-# --- Comparisons ---
-
+# ── Conditions ────────────────────────────────────────────────────────────────
 age = 20
-
 if age less than 18
 - say "Too young"
-
-if age is 20
-- say "Exactly 20"
-
-if age at least 18
+else
 - say "Old enough"
 
-# --- Booleans ---
-
-say ""
+# ── Booleans ──────────────────────────────────────────────────────────────────
 ready = YES
-done = NO
-
 if ready is YES
-- say "Ready to go"
+- say "Let's go"
 
-if done is NO
-- say "Not done yet"
+# ── Lists and contains ────────────────────────────────────────────────────────
+fruits = "apple", "banana", "mango"
+say "Fruit count: " + text(count(fruits))
+if fruits contains "banana"
+- say "Found banana"
 
-# --- Loops ---
+# ── Loop ──────────────────────────────────────────────────────────────────────
+n = 3
+loop n more than 0
+- say "Countdown: {n}"
+- n = n - 1
+say "Done"
 
-say ""
-say "Counting up:"
+# ── Functions ─────────────────────────────────────────────────────────────────
+function greet person
+- say "Hello, {person}!"
 
-count = 1
+function add a, b
+- return a + b
 
-loop count less than 4
-- say "  count is {count}"
-- count = count + 1
+greet "World"
+result = add(10, 7)
+say "10 + 7 = {result}"
 
-# --- Lists ---
-
-say ""
-say "Checking list membership:"
-
-langs = "python,rust,ixx,go"
-
-if langs contains "ixx"
-- say "  ixx is in the list"
-
-if langs contains "java"
-- say "  java is in the list"
-else
-- say "  java is not in the list"
-
-# --- Nested blocks ---
-
-say ""
-say "Nested check:"
-
-x = 10
-
-if x more than 5
-- say "  x is more than 5"
-- if x less than 20
--- say "  x is also less than 20"
-
-# --- Done ---
-
-say ""
-say "That is IXX."
+# ── Built-ins ─────────────────────────────────────────────────────────────────
+items = "one", "two", "three"
+say "Item count: " + text(count(items))
+say "Type of result: " + type(result)
+say "Number from text: " + text(number("42"))

@@ -189,37 +189,72 @@ IXX is trying to be the thing people open instead of memorising the differences 
 
 ---
 
-## Functions — v0.4.0
+## Functions — v0.4.0 (completed)
 
-Functions are the next major IXX language feature. They are deliberately held to v0.4.0 because they require grammar changes, interpreter changes, and a scoping model that does not exist yet.
+User-defined functions are implemented in v0.4.0. They use the `function` keyword, dash-block bodies, and an explicit `return` statement. The interpreter uses a two-pass design so functions defined later in the file can be called from earlier lines.
 
-### Planned syntax
+### Syntax
 
 ```
-define greet name
+function greet name
 - say "Hello, {name}"
 
-greet "Ixxy"
+greet "World"
 ```
 
-Or with return values:
+Return values — expression-position calls require parentheses:
 
 ```
-define add a b
-- result = a + b
-- return result
+function add a, b
+- return a + b
 
-total = add 10 20
-say total
+result = add(5, 3)
+say result
 ```
 
-### Why not now
+### Design decisions
 
-- The current interpreter has no call stack or return mechanism.
-- The grammar has no `define` or `return` keyword yet.
-- The scoping model (outer-scope modification vs. local) needs extending.
+- **LALR(1) parser retained.** Ambiguity resolved by requiring parentheses only in expression position, not at statement level.
+- **Clean local scope.** `FunctionEnvironment` class isolates function writes from the global scope. Reads still see globals.
+- **Two-pass execution.** All `FuncDef` nodes collected before any code runs, enabling forward calls.
+- **Call depth limit: 100.** Friendly `IXXRuntimeError` on overflow. Python's own `RecursionError` is also caught and converted.
+- **Five built-in functions:** `count`, `text`, `number`, `type`, `ask`.
 
-Functions are a `v0.4.0` milestone. All other v0.3.x improvements come first.
+---
+
+## v0.5 — Extended built-in library (pending)
+
+The following built-ins are planned for v0.5. They are intentionally deferred from v0.4:
+
+**Text:** `upper`, `lower`, `trim`, `length`, `split`, `join`, `replace`
+
+**Math:** `round`, `floor`, `ceil`, `abs`, `min`, `max`, `sqrt`, `power`
+
+**Lists:** `first`, `last`, `sort`, `reverse`, `unique`
+
+---
+
+## v0.5 — Records / objects (pending)
+
+Structured named fields on a value. Syntax TBD.
+
+---
+
+## v0.5 — try / if error (pending)
+
+Error handling at the IXX level. Syntax TBD.
+
+---
+
+## v0.6 — Modules / imports (pending)
+
+Import other `.ixx` files as modules. Syntax TBD.
+
+---
+
+## v0.7 — Native bridge (pending)
+
+Run raw shell commands from IXX. Syntax TBD.
 
 ---
 

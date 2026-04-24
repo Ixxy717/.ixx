@@ -2,25 +2,39 @@
 IXX interpreter: walks an AST and produces side effects.
 
 The Environment maps variable names to values.
-Child environments are created for if/loop blocks.
+Child environments are created for if/loop blocks; FunctionEnvironment
+is used for function calls to isolate local writes from the global scope.
 """
 
 from __future__ import annotations
 import re
+import sys
 from .ast_nodes import (
     Program, Assign, If, Loop, Say,
     IntLit, FloatLit, StrLit, BoolLit, ListLit, VarRef,
     NegOp, BinOp, Compare, AndOp, OrOp, NotOp,
+    CallExpr, CallStmt, ReturnStmt, FuncDef,
     IXXValue, Expr, Stmt,
 )
 
 _INTERP_RE = re.compile(r'\{([A-Za-z_][A-Za-z0-9_]*)\}')
+
+_LOOP_LIMIT = 10_000
+_CALL_DEPTH_LIMIT = 100
 
 
 # ── runtime errors ─────────────────────────────────────────────────────────────
 
 class IXXRuntimeError(Exception):
     pass
+
+
+# ── return signal ──────────────────────────────────────────────────────────────
+
+class _ReturnSignal(Exception):
+    """Used to unwind the call stack on a `return` statement."""
+    def __init__(self, value: IXXValue):
+        self.value = value
 
 
 # ── environment ────────────────────────────────────────────────────────────────
@@ -62,6 +76,81 @@ class Environment:
         return Environment(parent=self)
 
 
+class FunctionEnvironment(Environment):
+    """Local scope for a function call.
+
+    Reads propagate up to the global scope (so globals are readable).
+    Writes are always local — never propagate back to the global scope.
+    This gives clean function isolation without requiring explicit 'global'.
+    """
+
+    def set(self, name: str, value: IXXValue) -> None:
+        # Always write locally — never update the parent (global) scope.
+        self._vars[name] = value
+
+
+# ── built-in functions ─────────────────────────────────────────────────────────
+
+def _ixx_type_name(value: IXXValue) -> str:
+    """Return the IXX type name for a value (never exposes Python names)."""
+    if value is None:       return "nothing"
+    if isinstance(value, bool):  return "bool"
+    if isinstance(value, (int, float)): return "number"
+    if isinstance(value, str):   return "text"
+    if isinstance(value, list):  return "list"
+    return "unknown"
+
+
+def _builtin_count(x: IXXValue) -> int:
+    if isinstance(x, (str, list)):
+        return len(x)
+    raise IXXRuntimeError(
+        f"'count' works on lists and text, not {_ixx_type_name(x)}."
+    )
+
+
+def _builtin_text(x: IXXValue) -> str:
+    return _display(x)
+
+
+def _builtin_number(x: IXXValue) -> int | float:
+    if isinstance(x, bool):
+        raise IXXRuntimeError(
+            f"Cannot convert '{_display(x)}' to a number."
+        )
+    if isinstance(x, (int, float)):
+        return x
+    s = str(x)
+    try:
+        return int(s)
+    except ValueError:
+        pass
+    try:
+        return float(s)
+    except ValueError:
+        pass
+    raise IXXRuntimeError(
+        f"Cannot convert '{x}' to a number."
+    )
+
+
+def _builtin_type(x: IXXValue) -> str:
+    return _ixx_type_name(x)
+
+
+def _builtin_ask(prompt: IXXValue = "") -> str:
+    return input(str(prompt))
+
+
+BUILT_INS: dict[str, object] = {
+    "count":  _builtin_count,
+    "text":   _builtin_text,
+    "number": _builtin_number,
+    "type":   _builtin_type,
+    "ask":    _builtin_ask,
+}
+
+
 # ── helpers ────────────────────────────────────────────────────────────────────
 
 def _truthy(value: IXXValue) -> bool:
@@ -85,8 +174,23 @@ def _display(value: IXXValue) -> str:
 class Interpreter:
     """Evaluates an IXX Program."""
 
+    def __init__(self) -> None:
+        self._func_table: dict[str, FuncDef] = {}
+        self._global_env: Environment = Environment()
+        self._call_depth: int = 0
+
     def run(self, program: Program) -> None:
-        self._exec_block(program.body, Environment())
+        self._global_env = Environment()
+        self._func_table = {}
+        self._call_depth = 0
+
+        # First pass: collect all FuncDef nodes so forward calls work.
+        for stmt in program.body:
+            if isinstance(stmt, FuncDef):
+                self._func_table[stmt.name] = stmt
+
+        # Second pass: execute all statements.
+        self._exec_block(program.body, self._global_env)
 
     # ── statement dispatch ─────────────────────────────────────────────────────
 
@@ -106,12 +210,34 @@ class Interpreter:
                     self._exec_block(else_body, env.child())
 
             case Loop(condition=cond, body=body):
+                iterations = 0
                 while _truthy(self._eval(cond, env)):
+                    iterations += 1
+                    if iterations > _LOOP_LIMIT:
+                        raise IXXRuntimeError(
+                            f"Loop ran more than {_LOOP_LIMIT:,} times — did you mean to loop forever?\n"
+                            "  Tip: Make sure your loop condition eventually becomes NO."
+                        )
                     self._exec_block(body, env.child())
 
             case Say(args=args):
                 parts = [_display(self._eval(a, env)) for a in args]
                 print(" ".join(parts))
+
+            case CallStmt(name=name, args=arg_exprs):
+                evaluated = [self._eval(a, env) for a in arg_exprs]
+                self._call(name, evaluated)
+
+            case ReturnStmt(value=val_expr):
+                if self._call_depth == 0:
+                    raise IXXRuntimeError(
+                        "'return' can only be used inside a function."
+                    )
+                value = self._eval(val_expr, env) if val_expr is not None else None
+                raise _ReturnSignal(value)
+
+            case FuncDef():
+                pass  # already collected during the first pass in run()
 
             case _:
                 raise IXXRuntimeError(
@@ -137,10 +263,14 @@ class Interpreter:
 
             case NegOp(operand=operand):
                 v = self._eval(operand, env)
+                if isinstance(v, bool):
+                    raise IXXRuntimeError(
+                        "Cannot negate a YES/NO value."
+                    )
                 if isinstance(v, (int, float)):
                     return -v
                 raise IXXRuntimeError(
-                    f"Cannot negate a {type(v).__name__} value."
+                    f"Cannot negate a {_ixx_type_name(v)} value."
                 )
 
             case BinOp(op=op, left=left, right=right):
@@ -160,25 +290,87 @@ class Interpreter:
             case NotOp(operand=operand):
                 return not _truthy(self._eval(operand, env))
 
+            case CallExpr(name=name, args=arg_exprs):
+                evaluated = [self._eval(a, env) for a in arg_exprs]
+                return self._call(name, evaluated)
+
             case _:
                 raise IXXRuntimeError(
                     f"Unknown expression type: {type(expr).__name__}"
                 )
 
+    # ── function dispatch ──────────────────────────────────────────────────────
+
+    def _call(self, name: str, args: list[IXXValue]) -> IXXValue:
+        """Call a built-in or user-defined function and return its value."""
+
+        # Built-ins first
+        if name in BUILT_INS:
+            fn = BUILT_INS[name]
+            try:
+                return fn(*args)  # type: ignore[operator]
+            except IXXRuntimeError:
+                raise
+            except TypeError as e:
+                raise IXXRuntimeError(
+                    f"Wrong number of arguments for '{name}': {e}"
+                )
+
+        # User-defined functions
+        if name in self._func_table:
+            func = self._func_table[name]
+            if len(args) != len(func.params):
+                raise IXXRuntimeError(
+                    f"'{name}' expects {len(func.params)} argument(s), got {len(args)}."
+                    + (f"  Parameters: {', '.join(func.params)}" if func.params else "")
+                )
+
+            self._call_depth += 1
+            if self._call_depth > _CALL_DEPTH_LIMIT:
+                self._call_depth -= 1
+                raise IXXRuntimeError(
+                    f"Recursion too deep ({_CALL_DEPTH_LIMIT}+ calls). "
+                    "Check for infinite recursion."
+                )
+
+            local = FunctionEnvironment(parent=self._global_env)
+            for param, value in zip(func.params, args):
+                local._vars[param] = value
+
+            try:
+                self._exec_block(func.body, local)
+                return None
+            except _ReturnSignal as ret:
+                return ret.value
+            except RecursionError:
+                raise IXXRuntimeError(
+                    "Recursion too deep. Check for infinite recursion."
+                )
+            finally:
+                self._call_depth -= 1
+
+        raise IXXRuntimeError(
+            f"'{name}' is not a function. "
+            f"Tip: define it with: function {name} ..."
+        )
+
     # ── string interpolation ───────────────────────────────────────────────────
 
     def _interpolate(self, text: str, env: Environment) -> str:
-        """Replace {varname} placeholders with the current variable values."""
+        """Replace {varname} with current variable values.
+
+        Undefined variables print a warning to stderr and render as {?name}.
+        """
         def replace(m: re.Match) -> str:
             name = m.group(1)
             try:
                 return _display(env.get(name))
             except IXXRuntimeError:
-                raise IXXRuntimeError(
-                    f"I don't know what '{name}' is. Did you set it yet?\n"
-                    f"  Tip: {name} = \"your value\"\n"
-                    f"  (referenced inside a string as {{{name}}})"
+                print(
+                    f"Warning: '{name}' is not defined — showing {{?{name}}} instead",
+                    file=sys.stderr,
                 )
+                return "{?" + name + "}"
         return _INTERP_RE.sub(replace, text)
 
     # ── arithmetic ─────────────────────────────────────────────────────────────
@@ -188,6 +380,14 @@ class Interpreter:
     ) -> IXXValue:
         lv = self._eval(left, env)
         rv = self._eval(right, env)
+
+        # Guard: booleans must not silently coerce to int in arithmetic
+        if isinstance(lv, bool) or isinstance(rv, bool):
+            raise IXXRuntimeError(
+                "Cannot use YES/NO in arithmetic. "
+                "Use a number instead."
+            )
+
         match op:
             case "+":
                 # String + anything = string concatenation
@@ -229,8 +429,8 @@ class Interpreter:
             case "less than" | "more than" | "at least" | "at most":
                 if isinstance(a, bool) or isinstance(b, bool):
                     raise IXXRuntimeError(
-                        "You can't use number comparisons on YES/NO values.\n"
-                        "  Use 'is' or 'is not' to compare booleans."
+                        "Cannot use YES/NO in numeric comparisons. "
+                        "Use 'is' or 'is not' to compare booleans."
                     )
                 match op:
                     case "less than": return a < b   # type: ignore[operator]
@@ -239,15 +439,20 @@ class Interpreter:
                     case "at most":   return a <= b  # type: ignore[operator]
             case "contains":
                 if isinstance(a, list):
-                    if b in a:
-                        return True
-                    # Coerce: match by string representation so "2" matches 2
-                    b_str = _display(b)
-                    return any(_display(item) == b_str for item in a)
+                    # Warn if element types don't match
+                    if a and type(a[0]) != type(b):
+                        print(
+                            f"Warning: types don't match in 'contains' — "
+                            f"looking for {_ixx_type_name(b)} in a list of "
+                            f"{_ixx_type_name(a[0])}",
+                            file=sys.stderr,
+                        )
+                    return b in a
                 if isinstance(a, str):
                     return str(b) in a
                 raise IXXRuntimeError(
-                    f"'contains' only works on lists and text, not {type(a).__name__}."
+                    f"'contains' only works on lists and text, not {_ixx_type_name(a)}."
                 )
             case _:
                 raise IXXRuntimeError(f"Unknown comparison: {op!r}")
+        return False  # unreachable, satisfies type checker

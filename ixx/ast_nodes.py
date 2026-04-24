@@ -69,9 +69,15 @@ class OrOp:
 class NotOp:
     operand: "Expr"
 
+@dataclass
+class CallExpr:
+    """Expression-position function call: must use parentheses, e.g. add(5, 3)."""
+    name: str
+    args: list["Expr"]
+
 Expr = (
     IntLit | FloatLit | StrLit | BoolLit | ListLit | VarRef |
-    NegOp | BinOp | Compare | AndOp | OrOp | NotOp
+    NegOp | BinOp | Compare | AndOp | OrOp | NotOp | CallExpr
 )
 
 
@@ -97,7 +103,25 @@ class Loop:
 class Say:
     args: list[Expr]
 
-Stmt = Assign | If | Loop | Say
+@dataclass
+class CallStmt:
+    """Statement-position function call: space-separated args, e.g. greet "World"."""
+    name: str
+    args: list[Expr]
+
+@dataclass
+class ReturnStmt:
+    """Return from a function.  value is None for bare `return`."""
+    value: "Expr | None"
+
+@dataclass
+class FuncDef:
+    """User-defined function definition."""
+    name: str
+    params: list[str]
+    body: list["Stmt"]
+
+Stmt = Assign | If | Loop | Say | CallStmt | ReturnStmt | FuncDef
 
 @dataclass
 class Program:

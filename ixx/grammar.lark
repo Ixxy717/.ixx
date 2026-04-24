@@ -8,6 +8,9 @@ statement: assignment _NEWLINE
          | if_stmt
          | loop_stmt
          | say_stmt _NEWLINE
+         | call_stmt
+         | return_stmt
+         | func_def
 
 // RHS is one or more comma-separated exprs.
 // Multiple → ListLit.  Single → plain value.  Transformer handles the distinction.
@@ -18,6 +21,21 @@ if_stmt: "if" expr _NEWLINE block ("else" _NEWLINE block)?
 loop_stmt: "loop" expr _NEWLINE block
 
 say_stmt: "say" (expr ("," expr)*)?
+
+// Statement-level function call: space-separated args, no return capture.
+// IDENTIFIER alone (no args) calls a zero-parameter function.
+// Multiple args separated by commas: greet "World"  |  add 3, 4
+call_stmt: IDENTIFIER (expr ("," expr)*)? _NEWLINE
+
+// return statement — grammar allows it everywhere; interpreter enforces
+// that it only appears inside a function body at runtime.
+return_stmt: _RETURN_KW (expr)? _NEWLINE
+
+// Function definition
+func_def: _FUNCTION_KW IDENTIFIER func_params? _NEWLINE block
+
+// Comma-separated parameter names
+func_params: IDENTIFIER ("," IDENTIFIER)*
 
 block: _INDENT statement+ _DEDENT
 
@@ -58,13 +76,20 @@ block: _INDENT statement+ _DEDENT
         | ESCAPED_STRING              -> str_lit
         | YES                         -> yes_lit
         | NO                          -> no_lit
+        | IDENTIFIER "(" (expr ("," expr)*)? ")"  -> call_expr
         | IDENTIFIER                  -> var_ref
 
 // ─── terminals ───────────────────────────────────────────────────────────────
 
-// YES / NO are case-insensitive boolean literals
-YES.1:      /[Yy][Ee][Ss]/
-NO.1:       /[Nn][Oo]/
+// Language keywords — priority 2 beats IDENTIFIER (priority 0)
+_FUNCTION_KW.2: "function"
+_RETURN_KW.2:   "return"
+
+// YES / NO are case-insensitive boolean literals.
+// Negative lookahead ensures they don't match as prefixes of identifiers
+// (e.g. "noop" must not be lexed as NO + "op").
+YES.1:      /[Yy][Ee][Ss](?![A-Za-z0-9_])/
+NO.1:       /[Nn][Oo](?![A-Za-z0-9_])/
 
 // Comparison keyword terminals.
 // Underscore prefix = Lark drops them from the parse tree, so transformer

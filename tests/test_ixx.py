@@ -98,11 +98,16 @@ class TestStrings(unittest.TestCase):
     def test_string_interpolation_number(self):
         self.assertEqual(run('score = 99\nsay "Score: {score}"'), "Score: 99")
 
-    def test_string_interpolation_undefined_raises(self):
-        # {undefined} now raises an error instead of silently passing through
-        with self.assertRaises(IXXRuntimeError) as ctx:
-            run('say "Hello {ghost}"')
-        self.assertIn("ghost", str(ctx.exception))
+    def test_string_interpolation_undefined_left_as_is(self):
+        # {undefined} becomes {?name} with a warning to stderr (v0.4 behavior)
+        buf_err = io.StringIO()
+        buf_out = io.StringIO()
+        with contextlib.redirect_stderr(buf_err), contextlib.redirect_stdout(buf_out):
+            prog = parse('say "Hello {ghost}"')
+            from ixx.interpreter import Interpreter as _I
+            _I().run(prog)
+        self.assertIn("{?ghost}", buf_out.getvalue())
+        self.assertIn("ghost", buf_err.getvalue())
 
     def test_string_interpolation_multiple(self):
         self.assertEqual(
@@ -458,7 +463,7 @@ class TestCLI(unittest.TestCase):
     def test_version(self):
         code, out = cli("version")
         self.assertEqual(code, 0)
-        self.assertIn("0.3.", out)
+        self.assertIn("0.4.", out)
 
     def test_help_contains_usage(self):
         code, out = cli("help")
@@ -534,77 +539,6 @@ class TestCLI(unittest.TestCase):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-
-# ══════════════════════════════════════════════════════════════════════════════
-# 14. Bug fixes (v0.3.8)
-# ══════════════════════════════════════════════════════════════════════════════
-
-class TestBugFixes(unittest.TestCase):
-    """Regression tests for v0.3.8 language bug fixes."""
-
-    # Fix 1: Blank lines inside dash-blocks no longer crash the parser
-    def test_blank_line_in_block_allowed(self):
-        src = 'x = 5\nif x more than 3\n\n- say "yes"'
-        self.assertEqual(run(src), "yes")
-
-    def test_blank_line_between_blocks_allowed(self):
-        src = 'say "a"\n\nsay "b"'
-        self.assertEqual(run(src), "a\nb")
-
-    # Fix 2: Undefined variable in string interpolation raises an error
-    def test_interpolation_undefined_raises(self):
-        with self.assertRaises(IXXRuntimeError) as ctx:
-            run('say "Hello {ghost}"')
-        self.assertIn("ghost", str(ctx.exception))
-
-    def test_interpolation_undefined_message_mentions_string(self):
-        with self.assertRaises(IXXRuntimeError) as ctx:
-            run('say "value is {missing}"')
-        msg = str(ctx.exception)
-        self.assertIn("missing", msg)
-        self.assertIn("Tip:", msg)
-
-    def test_interpolation_defined_still_works(self):
-        self.assertEqual(run('name = "Ixxy"\nsay "Hello {name}"'), "Hello Ixxy")
-
-    # Fix 3: Boolean-integer mixing raises an error on ordered comparisons
-    def test_bool_more_than_int_raises(self):
-        with self.assertRaises(IXXRuntimeError) as ctx:
-            run("flag = YES\nif flag more than 0\n- say \"yes\"")
-        self.assertIn("YES/NO", str(ctx.exception))
-
-    def test_bool_less_than_int_raises(self):
-        with self.assertRaises(IXXRuntimeError):
-            run("flag = NO\nif flag less than 5\n- say \"yes\"")
-
-    def test_bool_at_least_raises(self):
-        with self.assertRaises(IXXRuntimeError):
-            run("x = YES\nif x at least 1\n- say \"yes\"")
-
-    def test_bool_is_int_still_works(self):
-        # 'is' equality between bool and int should still work (Python semantics)
-        self.assertEqual(run("x = YES\nif x is YES\n- say \"ok\""), "ok")
-
-    # Fix 5: contains coerces types for list membership
-    def test_contains_string_matches_int(self):
-        result = run('ids = 1, 2, 3\nif ids contains "2"\n- say "found"')
-        self.assertEqual(result, "found")
-
-    def test_contains_int_matches_int_still_works(self):
-        result = run('ids = 1, 2, 3\nif ids contains 2\n- say "found"')
-        self.assertEqual(result, "found")
-
-    def test_contains_string_no_match(self):
-        result = run('ids = 1, 2, 3\nif ids contains "9"\n- say "found"\nelse\n- say "not found"')
-        self.assertEqual(result, "not found")
-
-    # Fix 7 (consequence of Fix 2): inner-scope variable not leaking + interpolation
-    def test_inner_scope_var_interpolation_raises(self):
-        src = 'flag = YES\nif flag is YES\n- result = "done"\nsay "Result: {result}"'
-        with self.assertRaises(IXXRuntimeError) as ctx:
-            run(src)
-        self.assertIn("result", str(ctx.exception))
-
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

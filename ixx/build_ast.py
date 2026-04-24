@@ -12,6 +12,7 @@ from .ast_nodes import (
     Program, Assign, If, Loop, Say,
     IntLit, FloatLit, StrLit, BoolLit, ListLit, VarRef,
     NegOp, BinOp, Compare, AndOp, OrOp, NotOp,
+    CallExpr, CallStmt, ReturnStmt, FuncDef,
 )
 
 
@@ -46,8 +47,39 @@ class IXXTransformer(Transformer):
     def say_stmt(self, items):
         return Say(args=list(items))
 
+    def call_stmt(self, items):
+        name = str(items[0])
+        args = list(items[1:])
+        return CallStmt(name=name, args=args)
+
+    def return_stmt(self, items):
+        value = items[0] if items else None
+        return ReturnStmt(value=value)
+
+    def func_def(self, items):
+        name = str(items[0])
+        # items[1] is either func_params (list[str]) or a block (list[Stmt])
+        # items[-1] is always the block
+        if len(items) == 3:
+            params = list(items[1])
+            body   = items[2]
+        else:
+            params = []
+            body   = items[1]
+        return FuncDef(name=name, params=params, body=body)
+
+    def func_params(self, items):
+        return [str(t) for t in items]
+
     def block(self, items):
         return [s for s in items if s is not None]
+
+    # ── function call expression ────────────────────────────────────────────────
+
+    def call_expr(self, items):
+        name = str(items[0])
+        args = list(items[1:])
+        return CallExpr(name=name, args=args)
 
     # ── literals ───────────────────────────────────────────────────────────────
 

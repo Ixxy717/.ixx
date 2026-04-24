@@ -16,10 +16,13 @@ so the standard Lark Indenter can measure depth as usual.
 Rules:
   - Lines that start with one or more dashes (optionally followed by a space)
     are converted: each dash = 4 spaces of indentation.
-  - Everything else is left alone.
-  - Blank lines are removed entirely — they confuse the Lark Indenter inside
-    indented blocks.  They carry no semantic meaning in IXX.
-  - Comment lines (starting with #) pass through unchanged.
+  - Blank and whitespace-only lines are stripped (they would confuse the Lark
+    Indenter by emitting a spurious DEDENT mid-block).
+  - Comment lines (starting with #) and all other lines pass through unchanged.
+
+Known limitation: stripping blank lines shifts source line numbers, so syntax
+error messages will cite the post-processed line number rather than the
+original.  A source-line map can be added in a future release if needed.
 """
 
 from __future__ import annotations
@@ -33,6 +36,10 @@ def preprocess(source: str) -> str:
     lines = source.split('\n')
     out = []
     for line in lines:
+        # Strip blank / whitespace-only lines before Lark's Indenter sees them.
+        # Blank lines inside blocks would emit a spurious DEDENT token.
+        if line.strip() == '':
+            continue
         m = _DASH_LINE.match(line)
         if m:
             depth = len(m.group(1))
@@ -40,7 +47,4 @@ def preprocess(source: str) -> str:
             out.append('    ' * depth + content)
         else:
             out.append(line)
-    # Remove blank lines — the Lark Indenter treats them as DEDENT signals inside
-    # indented blocks, breaking indent tracking.  IXX has no blank-line-sensitive syntax.
-    out = [l for l in out if l.strip() != ""]
     return '\n'.join(out)

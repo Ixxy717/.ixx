@@ -19,15 +19,30 @@ _DIM    = "\033[2m"
 _YELLOW = "\033[33m"
 _CYAN   = "\033[36m"
 _RED    = "\033[31m"
+_GREEN  = "\033[32m"
 _RESET  = "\033[0m"
 
 
 def _enable_ansi() -> bool:
     """Return True if ANSI escape codes will render correctly.
 
+    Env-var overrides (checked before TTY detection):
+      NO_COLOR=<any>   — standard https://no-color.org/ flag: disable ANSI
+      IXX_COLOR=0      — IXX-specific: disable ANSI
+      IXX_COLOR=1      — IXX-specific: force ANSI on even if not a TTY
+
     On Windows, Virtual Terminal Processing must be explicitly enabled via
     SetConsoleMode.  On any other OS, isatty() is sufficient.
     """
+    # Env-var overrides take priority over TTY detection
+    if os.environ.get("NO_COLOR") is not None:
+        return False
+    ixx_color = os.environ.get("IXX_COLOR")
+    if ixx_color == "0":
+        return False
+    if ixx_color == "1":
+        return True  # force-on even without a TTY
+
     if not sys.stdout.isatty():
         return False
     if os.name == "nt":
@@ -271,3 +286,19 @@ def show_destructive_prompt(description: str) -> bool:
         print()
         return False
     return answer in ("yes", "y")
+
+
+# ---------------------------------------------------------------------------
+# Coloured status messages
+# ---------------------------------------------------------------------------
+
+def show_error(msg: str) -> None:
+    """Print an error message to stderr, in red when colour is enabled."""
+    import sys as _sys
+    prefix = _c(_RED, "Error") if _ANSI else "Error"
+    print(f"{prefix}: {msg}", file=_sys.stderr)
+
+
+def show_success(msg: str) -> None:
+    """Print a success message to stdout, in green when colour is enabled."""
+    print(_c(_GREEN, msg))

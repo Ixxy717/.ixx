@@ -34,6 +34,7 @@ Usage:
   ixx shell               open the IXX interactive shell
   ixx do "ip wifi"        run one shell command and exit
   ixx demo                run the built-in demo script
+  ixx demo interactive    run the step-by-step interactive walkthrough
 
 Language quick-reference:
   say "Hello World"
@@ -174,28 +175,9 @@ def _format_syntax_error(path: str, source: str, e: Exception) -> None:
     print(f"ixx: syntax error in {path} {loc}\n", file=sys.stderr)
 
     if orig_line is not None:
-        # Special case: blank line caused the error
-        if orig_line.strip() == "":
-            print(f"  (blank line)", file=sys.stderr)
-            print(f"\n  Hint: blank lines inside dash-blocks confuse the parser.", file=sys.stderr)
-            print(f"  Remove blank lines from inside if/loop/else blocks.", file=sys.stderr)
-            print(file=sys.stderr)
-            return
-
         print(f"  {orig_line}", file=sys.stderr)
         if col is not None and col >= 1:
             print(f"  {' ' * (col - 1)}^", file=sys.stderr)
-
-        # Special case: else at wrong dash level (e.g. "-- else" when "- if" was used)
-        if re.match(r'^--+\s*else', orig_line):
-            print(
-                f"\n  Hint: 'else' must use the same dash level as its 'if', not deeper.\n"
-                f"  Wrong:  - if ...  /  -- else\n"
-                f"  Right:  - if ...  /  - else",
-                file=sys.stderr
-            )
-            print(file=sys.stderr)
-            return
     else:
         # No source line available — try get_context as a fallback
         try:
@@ -212,14 +194,16 @@ def _format_syntax_error(path: str, source: str, e: Exception) -> None:
 
 def _run_file(path: str, check_only: bool = False) -> None:
     if not os.path.isfile(path):
-        print(f"ixx: file not found: {path}", file=sys.stderr)
+        from .shell.renderer import show_error
+        show_error(f"file not found: {path}")
         sys.exit(1)
 
     try:
         with open(path, encoding="utf-8") as f:
             source = f.read()
     except OSError as e:
-        print(f"ixx: cannot read file: {e}", file=sys.stderr)
+        from .shell.renderer import show_error
+        show_error(f"cannot read file: {e}")
         sys.exit(1)
 
     from lark.exceptions import UnexpectedInput
@@ -243,8 +227,8 @@ def _run_file(path: str, check_only: bool = False) -> None:
     try:
         Interpreter().run(program)
     except IXXRuntimeError as e:
-        print(f"ixx: runtime error in {path}", file=sys.stderr)
-        print(f"  {e}", file=sys.stderr)
+        from .shell.renderer import show_error
+        show_error(f"runtime error in {path}\n  {e}")
         sys.exit(1)
 
 
@@ -300,8 +284,16 @@ def main() -> None:
 
     # --- ixx demo ---
     if cmd == "demo":
-        from .shell.commands.demo_walk import handle_demo_walk
-        handle_demo_walk([])
+        sub = args[1] if len(args) > 1 else None
+        if sub in ("interactive", "walkthrough"):
+            from .shell.commands.demo_walk import handle_demo_walk
+            handle_demo_walk([])
+        else:
+            # Run the bundled try-it.ixx script
+            import importlib.resources
+            ref = importlib.resources.files("ixx.assets").joinpath("try-it.ixx")
+            with importlib.resources.as_file(ref) as p:
+                _run_file(str(p))
         return
 
     # --- ixx setup ---
