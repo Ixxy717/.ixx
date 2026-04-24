@@ -107,12 +107,13 @@ def _handle_update() -> None:
     import subprocess
     from .renderer import show_success, show_error
     print()
-    print("  Checking for the latest IXX version...\n")
+    print("  Checking for the latest IXX version...\n", flush=True)
     try:
         result = subprocess.run(
             [sys.executable, "-m", "pip", "install", "--upgrade", "ixx"],
             capture_output=False,
         )
+        print()
         if result.returncode == 0:
             show_success("Update complete. Restart ixx to use the new version.")
         else:
