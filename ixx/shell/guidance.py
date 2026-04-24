@@ -18,6 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .registry import CommandNode, CommandRegistry
+from .aliases import ROOT_ALIASES
 
 
 @dataclass
@@ -36,6 +37,16 @@ class GuidanceResult:
     depth: int = 0
 
 
+def _find_child(node: CommandNode, tok: str) -> CommandNode | None:
+    """Find a child node by exact name or by alias."""
+    if tok in node.subcommands:
+        return node.subcommands[tok]
+    for child in node.subcommands.values():
+        if tok in child.aliases:
+            return child
+    return None
+
+
 def get_guidance(registry: CommandRegistry, tokens: list[str]) -> GuidanceResult:
     """Walk the command tree and return a GuidanceResult for *tokens*.
 
@@ -52,16 +63,20 @@ def get_guidance(registry: CommandRegistry, tokens: list[str]) -> GuidanceResult
             next_options=registry.root_names(),
         )
 
-    # Walk the tree
+    # Walk the tree — check root by exact name first, then ROOT_ALIASES
     node = registry.get(tokens[0])
+    if node is None:
+        canonical = ROOT_ALIASES.get(tokens[0])
+        if canonical:
+            node = registry.get(canonical)
     if node is None:
         return GuidanceResult()  # unknown command
 
     depth = 1
     for tok in tokens[1:]:
-        child = node.subcommands.get(tok)
+        child = _find_child(node, tok)
         if child is None:
-            # Token doesn't match a subcommand — remaining tokens are free args
+            # Token doesn't match a subcommand or alias — remaining tokens are free args
             break
         node = child
         depth += 1

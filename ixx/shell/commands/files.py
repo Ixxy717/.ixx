@@ -144,3 +144,80 @@ def handle_list(args: list[str]) -> None:
 
     print(render_table(["Name", "Type", "Size"], rows))
     print()
+
+
+# ---------------------------------------------------------------------------
+# find file
+# ---------------------------------------------------------------------------
+
+def handle_find_file(args: list[str]) -> None:
+    """Search for files matching a pattern, with optional path alias.
+
+    Syntax:
+        find file <pattern>
+        find file <pattern> in <path>
+    """
+    if not args:
+        print("\n  Usage:    find file <pattern> [in <path>]")
+        print('  Example:  find file "*.pdf"')
+        print('  Example:  find file "invoice" in downloads\n')
+        return
+
+    # Parse "in <path>" suffix
+    search_path: Path | None = None
+    tokens = list(args)
+    if len(tokens) >= 2 and tokens[-2].lower() == "in":
+        raw_path = tokens[-1]
+        tokens = tokens[:-2]
+        try:
+            search_path = resolve(raw_path)
+        except PathNotFoundError as e:
+            _path_error(e.raw)
+            return
+
+    pattern = " ".join(tokens).strip('"\'')
+    if not pattern:
+        print('\n  Usage:    find file <pattern> [in <path>]\n')
+        return
+
+    base = search_path if search_path else Path.cwd()
+    if not base.is_dir():
+        print(f"\n  {base} is not a folder.\n")
+        return
+
+    # Add wildcard wrapping if user didn't include one
+    glob_pattern = pattern if ("*" in pattern or "?" in pattern) else f"*{pattern}*"
+
+    matches: list[Path] = []
+    LIMIT = 50
+    try:
+        for p in base.rglob(glob_pattern):
+            if p.is_file():
+                matches.append(p)
+                if len(matches) >= LIMIT:
+                    break
+    except PermissionError:
+        pass
+
+    if not matches:
+        print(f"\n  No files matching '{pattern}' found in {base.name}.\n")
+        return
+
+    rows = []
+    for m in matches:
+        try:
+            size = format_bytes(m.stat().st_size)
+        except OSError:
+            size = "-"
+        try:
+            rel = m.relative_to(base)
+        except ValueError:
+            rel = m
+        rows.append([m.name, str(rel.parent) if str(rel.parent) != "." else "-", size])
+
+    print(f"\n  Results for '{pattern}' in {base.name}:\n")
+    print(render_table(["Name", "Path", "Size"], rows))
+    if len(matches) == LIMIT:
+        print(f"  (showing first {LIMIT} results)\n")
+    else:
+        print()

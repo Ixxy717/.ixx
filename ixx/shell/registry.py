@@ -36,6 +36,7 @@ class CommandNode:
     name: str
     description: str = ""
     subcommands: dict[str, "CommandNode"] = field(default_factory=dict)
+    aliases: list[str] = field(default_factory=list)  # alternate names for this node
     arg_hint: str = ""          # e.g. "<path>", "<process-name>"
     examples: list[str] = field(default_factory=list)
     destructive: bool = False

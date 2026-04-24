@@ -1,0 +1,120 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "IXX",
+  "scopeName": "source.ixx",
+  "fileTypes": ["ixx"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#dash-blocks" },
+    { "include": "#booleans" },
+    { "include": "#keywords-control" },
+    { "include": "#keywords-io" },
+    { "include": "#keywords-logical" },
+    { "include": "#keywords-comparison" },
+    { "include": "#numbers" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.ixx",
+          "match": "#.*$"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.ixx",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "variable.other.interpolated.ixx",
+          "match": "\\{[^}]*\\}"
+        }
+      ]
+    },
+    "dash-blocks": {
+      "comment": "Dash block markers at start of line: -, --, ---",
+      "patterns": [
+        {
+          "name": "punctuation.definition.block.ixx",
+          "match": "^([ \\t]*)(---|--|-)"
+        }
+      ]
+    },
+    "booleans": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.ixx",
+          "match": "\\b(YES|NO|yes|no)\\b"
+        }
+      ]
+    },
+    "keywords-control": {
+      "patterns": [
+        {
+          "name": "keyword.control.ixx",
+          "match": "\\b(if|else|loop)\\b"
+        }
+      ]
+    },
+    "keywords-io": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.ixx",
+          "match": "\\b(say)\\b"
+        }
+      ]
+    },
+    "keywords-logical": {
+      "patterns": [
+        {
+          "name": "keyword.operator.logical.ixx",
+          "match": "\\b(and|or|not)\\b"
+        }
+      ]
+    },
+    "keywords-comparison": {
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison.ixx",
+          "match": "\\b(is|less|than|more|at|least|most|contains)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.ixx",
+          "match": "-?\\b\\d+\\.\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.ixx",
+          "match": "-?\\b\\d+\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.assignment.ixx",
+          "match": "="
+        },
+        {
+          "name": "keyword.operator.arithmetic.ixx",
+          "match": "[+\\-*/]"
+        },
+        {
+          "name": "punctuation.separator.ixx",
+          "match": ","
+        },
+        {
+          "name": "punctuation.brackets.round.ixx",
+          "match": "[()]"
+        }
+      ]
+    }
+  }
+}

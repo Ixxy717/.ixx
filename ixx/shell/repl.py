@@ -17,21 +17,25 @@ Responsibilities:
 
 from __future__ import annotations
 
+import difflib
 import sys
 
 from .commands.stubs import register_all
 from .guidance import get_guidance
 from .registry import CommandRegistry
+from .aliases import apply_aliases
 from .renderer import (
+    show_banner,
     show_help,
     show_hints,
     show_not_implemented,
     show_top_level,
     show_unknown,
+    show_unknown_subcommand,
 )
 
 PROMPT = "ixx> "
-VERSION = "0.3.0-dev"
+from .._version import VERSION
 
 # ---------------------------------------------------------------------------
 # Readline / history (best-effort; silently skipped if unavailable)
@@ -82,6 +86,18 @@ def _tokenize(line: str) -> list[str]:
     return tokens
 
 
+def _normalize(tokens: list[str]) -> list[str]:
+    """Lowercase all tokens so commands are case-insensitive.
+
+    Quoted path arguments (free-form strings the user typed) must preserve
+    their case, but command keywords are always lowercase in the registry.
+    We lowercase everything — path resolution handles case sensitivity at the
+    OS level, and quoted strings that reach handlers are reconstructed from
+    the original line anyway.
+    """
+    return [t.lower() for t in tokens]
+
+
 # ---------------------------------------------------------------------------
 # Meta-command helpers
 # ---------------------------------------------------------------------------
@@ -97,6 +113,103 @@ def _handle_help(registry: CommandRegistry, tokens: list[str]) -> None:
     # "<cmd> ?"   or "<cmd> help" →  topic is first token
     topic = tokens[1] if tokens[0] in ("help", "?") else tokens[0]
     show_help(registry, topic)
+
+
+def _try_run_ixx(first_line: str, prompt_fn) -> bool:
+    """
+    Attempt to parse and run *first_line* (and any continuation lines) as IXX.
+    Returns True if the input was recognised as IXX (even if it errored).
+    Returns False if it definitely is not IXX (so the caller can show "unknown command").
+    """
+    from ..parser import parse
+    from ..interpreter import Interpreter, IXXRuntimeError
+    from ..preprocessor import preprocess
+    from lark.exceptions import UnexpectedInput, UnexpectedEOF
+
+    lines = [first_line]
+
+    # Try parsing with increasing number of lines (continuation loop)
+    while True:
+        source = "\n".join(lines)
+        try:
+            program = parse(source)
+            # Parsed OK — run it
+            try:
+                Interpreter().run(program)
+            except IXXRuntimeError as e:
+                print(f"  runtime error: {e}")
+            return True
+        except UnexpectedEOF:
+            # Incomplete — ask for more input
+            try:
+                cont = prompt_fn("... ")
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return True
+            if cont.strip() == "":
+                # Blank line — give up continuing, try to run what we have
+                try:
+                    program = parse(source)
+                    Interpreter().run(program)
+                except Exception:
+                    pass
+                return True
+            lines.append(cont)
+        except UnexpectedInput:
+            # Definite parse error — but only report it as IXX if the first
+            # token looks like IXX syntax, not a shell command typo.
+            ixx_starters = {
+                "say", "if", "else", "loop", "not",
+            }
+            first_token = first_line.strip().split()[0].lower() if first_line.strip() else ""
+            is_assignment = "=" in first_line and not first_line.strip().startswith("#")
+            if first_token in ixx_starters or is_assignment:
+                # Looks like IXX — report the error
+                print(f"  ixx: syntax error — check your code")
+                return True
+            # Looks like a mistyped shell command
+            return False
+        except Exception as e:
+            print(f"  ixx: error: {e}")
+            return True
+
+
+def _dispatch(registry: CommandRegistry, tokens: list[str],
+               raw_line: str = "", prompt_fn=None) -> None:
+    """Core dispatch logic shared by run() and run_command_once()."""
+    result = get_guidance(registry, tokens)
+
+    if result.matched_node is None:
+        # Try running the raw input as IXX before giving up
+        if raw_line and prompt_fn and _try_run_ixx(raw_line, prompt_fn):
+            return
+        suggestions = registry.suggest(tokens[0])
+        show_unknown(tokens[0], suggestions)
+        return
+
+    if result.is_executable:
+        node = result.matched_node
+        if result.remaining_args and node.subcommands:
+            # Token after parent didn't match any subcommand — not free-form args
+            unknown_sub = result.remaining_args[0]
+            sub_keys = list(node.subcommands.keys())
+            # Prefer prefix match (e.g. "temp" → "temperature") over difflib only
+            prefix_matches = [k for k in sub_keys if k.startswith(unknown_sub)]
+            if len(prefix_matches) == 1:
+                suggestions = prefix_matches
+            else:
+                suggestions = difflib.get_close_matches(
+                    unknown_sub, sub_keys, n=1, cutoff=0.6
+                )
+            show_unknown_subcommand(
+                " ".join(tokens[:result.depth]), unknown_sub, suggestions
+            )
+        elif node.handler is not None:
+            node.handler(result.remaining_args)
+        else:
+            show_not_implemented(" ".join(tokens[:result.depth]))
+    else:
+        show_hints(result)
 
 
 # ---------------------------------------------------------------------------
@@ -130,9 +243,11 @@ def run() -> None:
     _setup_readline()
     registry = _make_registry()
 
-    print(f"\nIXX Shell  {VERSION}")
-    print("Type a command to get started, or 'help' for a list.")
-    print("Type 'exit' to leave.\n")
+    show_banner(VERSION)
+
+    # Show update notice directly after banner if one is pending
+    from ..update_check import notify as _uc_notify
+    _uc_notify(VERSION, indent="")
 
     while True:
         try:
@@ -148,8 +263,8 @@ def run() -> None:
             show_top_level(registry)
             continue
 
-        tokens = _tokenize(line)
-        first = tokens[0].lower()
+        tokens = apply_aliases(_normalize(_tokenize(line)))
+        first = tokens[0]
 
         # ---- exit / quit ----
         if first in ("exit", "quit"):
@@ -161,30 +276,7 @@ def run() -> None:
             _handle_help(registry, tokens)
             continue
 
-        # ---- guidance lookup ----
-        result = get_guidance(registry, tokens)
-
-        if result.matched_node is None:
-            # Completely unknown first word
-            suggestions = registry.suggest(first)
-            show_unknown(first, suggestions)
-            continue
-
-        if result.is_executable:
-            node = result.matched_node
-            if node.handler is not None:
-                node.handler(result.remaining_args)
-            else:
-                # Node matched but handler is None — show stub message
-                path = " ".join(tokens[:result.depth])
-                show_not_implemented(path)
-        else:
-            # Matched a node but not yet at an executable point — show hints
-            show_hints(result)
-
-
-# ---------------------------------------------------------------------------
-# Single-command dispatch  (used by ixx do "...")
+        _dispatch(registry, tokens, raw_line=line, prompt_fn=input)
 # ---------------------------------------------------------------------------
 
 def run_command_once(line: str) -> None:
@@ -194,30 +286,15 @@ def run_command_once(line: str) -> None:
     """
     _utf8_stdout()
     registry = _make_registry()
-    tokens = _tokenize(line.strip())
+    tokens = apply_aliases(_normalize(_tokenize(line.strip())))
     if not tokens:
         return
 
-    first = tokens[0].lower()
+    first = tokens[0]
 
     # Help / ? passthrough
     if first in ("help", "?") or (len(tokens) >= 2 and tokens[-1] in ("?", "help")):
         _handle_help(registry, tokens)
         return
 
-    result = get_guidance(registry, tokens)
-
-    if result.matched_node is None:
-        suggestions = registry.suggest(first)
-        show_unknown(first, suggestions)
-        return
-
-    if result.is_executable:
-        node = result.matched_node
-        if node.handler is not None:
-            node.handler(result.remaining_args)
-        else:
-            path = " ".join(tokens[:result.depth])
-            show_not_implemented(path)
-    else:
-        show_hints(result)
+    _dispatch(registry, tokens)

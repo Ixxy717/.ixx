@@ -2,8 +2,6 @@
 
 This document describes the design of the IXX interactive shell and console.
 
-The shell is not yet implemented. This document is the authoritative design target.
-
 ---
 
 ## Identity
@@ -75,99 +73,30 @@ This is a first-class design goal, not a bonus feature.
 
 When the user types a command, the shell understands the current partial input and shows what valid arguments can come next. This is not dumb autocomplete. It is grammar-aware guidance.
 
-### Examples
+### What is implemented now (v0.3.0)
 
-Typing `cpu` shows:
+The current REPL provides:
 
-```
-usage
-core-count
-temperature
-speed
-info
-```
+- **`command ?`** — show valid next options for any command
+- **`help command`** — show full help, subcommands, examples, and safety notes
+- **`command help`** — same as above (trailing keyword)
+- **`? command`** — same as above (leading ?)
+- **Hint display** — when a partial command is entered (e.g. `delete`), the shell shows its subcommands and examples automatically
+- **Fuzzy correction** — unknown commands suggest the closest match
+- **Argument hints** — commands that take a free-form argument (e.g. `folder size <path>`) display their hint in the guidance output
+- **`ixx do "command"`** — single-dispatch mode for scripts and automation
 
-Typing `disk` shows:
+All of this is data-driven from the `CommandNode` tree. Adding a new command gives it guidance, help, and fuzzy correction automatically.
 
-```
-list
-health
-space
-partitions
-mounts
-```
-
-Typing `disk health` shows:
+### Help command examples
 
 ```
-all
-disk 0
-disk 1
-C:
-D:
-```
-
-Typing `delete` shows:
-
-```
-delete file <path>
-delete folder <path> [recursive] [force] [dry-run]
-delete temp
-delete empty-trash
-```
-
-Typing `copy` shows:
-
-```
-copy <source> to <destination>
-
-Examples:
-  copy report.pdf to desktop
-  copy downloads/file.zip to documents
-  copy folder project to desktop/project-backup
-```
-
-Typing `find file` shows:
-
-```
-find file <name or pattern> [in <path>]
-
-Examples:
-  find file "invoice"
-  find file "*.pdf" in downloads
-  find file "resume" in documents
-```
-
-Typing `ip` shows:
-
-```
-all
-wifi
-ethernet
-public
-local
-```
-
-### What the guidance engine knows per command
-
-For every built-in command, the guidance engine records:
-
-- Valid next words and argument types
-- Short description of each option
-- Whether the option or command is destructive
-- Whether admin or root access may be required
-- Whether the command runs immediately or prompts first
-- Whether a dry-run mode is available
-- Example invocations
-
-### Help commands
-
-```
-help                  broad categories
-help disk             disk commands
+help                  broad list of all commands
+help disk             disk commands, subcommands, examples
 help delete           delete syntax, examples, safety notes
 ? disk                same as help disk
 disk ?                valid next options for disk
+disk help             same as disk ?
 delete ?              valid next options for delete
 ```
 
@@ -176,26 +105,63 @@ delete ?              valid next options for delete
 If the user types something close but wrong:
 
 ```
-cpoy file.txt to desktop
+ixx> cpoy
+  Unknown command: cpoy
+  Did you mean: copy?
+
+ixx> diks
+  Unknown command: diks
+  Did you mean: disk?
 ```
 
-IXX responds:
+---
 
-```
-Did you mean: copy file.txt to desktop?
-```
+## Terminal UI boundary
 
-```
-wifi address
-```
+The current REPL is deliberately simple. It uses standard `input()` with optional readline history. This is intentional.
 
-IXX suggests:
+### What the current shell does — and keeps doing
 
-```
-wifi ip
-ip wifi
-network ip
-```
+- Guidance via `?`, `help`, trailing `help` keyword
+- Hint display when partial commands are entered
+- Fuzzy correction for mistyped commands
+- Command history via readline / pyreadline3
+- Basic Tab completion via readline if easy to wire without custom rendering
+
+### What belongs to the future IXX terminal app
+
+Full inline live completions require control over:
+
+- Input rendering (overwriting the current line as you type)
+- Cursor movement (moving between suggestion items)
+- Colored inline menus (rendering completions beside or below the cursor)
+- Multi-line editing
+- Proper resize handling
+
+These need a library like `prompt_toolkit` or a fully custom TUI, and they need
+the standalone compiled binary where input handling can be owned end-to-end.
+
+**Do not build this in v0.3 or v0.4.** The guidance system works well without it.
+The future IXX terminal app (standalone binary, v1.x) is the right home for full
+inline completions.
+
+### What this means in practice
+
+| Feature | Current REPL | Future TUI |
+|---|---|---|
+| `?` / `help` guidance | done | carry forward |
+| `cmd help` trailing keyword | done | carry forward |
+| Fuzzy correction | done | carry forward |
+| Argument hints in output | done | carry forward |
+| readline history | done | replace |
+| Basic Tab (readline) | acceptable if simple | replace |
+| Inline live completions | not here | future TUI |
+| Colored suggestion menus | not here | future TUI |
+| Cursor movement in hints | not here | future TUI |
+
+The rule: **guidance lives in the data (CommandNode). Display is replaceable.**
+When the terminal app is built, it reads the same registry and renders richer output.
+Nothing in the guidance engine needs to change.
 
 ---
 
@@ -390,15 +356,29 @@ Native passthrough is secondary. The point of IXX is to avoid needing it for com
 ## Shell project structure
 
 ```
-/shell
-  repl/               interactive loop, input handling, history
-  command-guidance/   grammar tree for built-in commands, next-arg engine
-  autocomplete/       render hints inline as user types
-  history/            command history and search
-  rendering/          output formatting, tables, colors, warnings
+ixx/shell/
+  repl.py             interactive loop, input handling, history, run_command_once()
+  registry.py         CommandNode dataclass and CommandRegistry
+  guidance.py         determines executability and next valid options from the tree
+  renderer.py         all output formatting (tables, colors, ANSI)
+  paths.py            path alias resolution (desktop, downloads, here, ...)
+  safety.py           format_bytes(), render_table() helpers
+  commands/
+    __init__.py
+    stubs.py          register_all() — wires every node, real and stub
+    hardware.py       cpu, ram handlers
+    network.py        ip, network handlers
+    system.py         disk, disk space handlers
+    files.py          folder size, open, list handlers
+  platform/
+    __init__.py       current() — selects the right platform module
+    common.py         run_command() subprocess helper
+    windows.py        real Windows implementations (PowerShell/CIM internally)
+    linux.py          placeholder stubs for future
+    macos.py          placeholder stubs for future
 ```
 
-The `command-guidance/` module is the core of the shell's identity. It holds the command grammar as a structured data tree, not hardcoded strings. Adding a new command makes it automatically discoverable via guidance, help, and fuzzy correction.
+The `registry.py` module is the core of the shell's identity. It holds the command grammar as a structured data tree, not hardcoded strings. Adding a new command makes it automatically discoverable via guidance, help, and fuzzy correction.
 
 ---
 

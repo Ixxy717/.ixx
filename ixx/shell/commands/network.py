@@ -62,10 +62,15 @@ def _classify_adapter(name: str, ip: str) -> str:
     if ip.startswith("192.168.56.") or ip.startswith("192.168.99."):
         return "virtual"
 
-    # Docker / WSL bridge ranges  (172.16-31.x.x are formally private,
-    # but 172.17-19.x are overwhelmingly Docker/WSL in practice)
+    # Docker/WSL bridge typically uses 172.17–172.19.
+    # RFC 1918 defines 172.16.0.0/12 (172.16–172.31) as private LAN.
+    # Only flag as virtual if outside the RFC 1918 range.
     if ip.startswith("172."):
-        return "virtual"
+        parts = ip.split(".")
+        second = int(parts[1]) if len(parts) > 1 else 0
+        if 16 <= second <= 31:
+            return "other"   # valid RFC 1918 LAN — treat as real
+        return "virtual"     # 172.0–172.15 or 172.32+ — likely VM/container
 
     # Wi-Fi by name
     if any(kw in name_lower for kw in _WIFI_NAMES):
@@ -283,3 +288,61 @@ def handle_network(args: list[str]) -> None:
     print()
     print(render_table(["Adapter", "Status", "IPv4", "Gateway"], rows))
     print()
+
+
+# ---------------------------------------------------------------------------
+# wifi — standalone Wi-Fi info
+# ---------------------------------------------------------------------------
+
+def handle_wifi(args: list[str]) -> None:
+    """Show current Wi-Fi network name, signal strength, and IP."""
+    try:
+        info = _platform.current().get_wifi_info()
+    except NotImplementedError:
+        _platform_error("wifi")
+        return
+    except Exception as e:
+        print(f"\n  wifi: could not retrieve info ({e})\n")
+        return
+
+    if not info:
+        print("\n  No Wi-Fi connection found.\n")
+        return
+
+    print()
+    print(f"  Network:  {info.get('ssid', '-')}")
+    print(f"  Signal:   {info.get('signal', '-')}")
+    print(f"  IP:       {info.get('ipv4', '-')}")
+    print()
+
+
+# ---------------------------------------------------------------------------
+# ethernet — standalone Ethernet info
+# ---------------------------------------------------------------------------
+
+def handle_ethernet(args: list[str]) -> None:
+    """Show the IPv4 address of the connected Ethernet adapter."""
+    handle_ip_ethernet(args)
+
+
+# ---------------------------------------------------------------------------
+# ip public
+# ---------------------------------------------------------------------------
+
+def handle_ip_public(args: list[str]) -> None:
+    """Show public-facing IP via external lookup."""
+    try:
+        ip = _platform.current().get_public_ip()
+    except NotImplementedError:
+        _platform_error("ip public")
+        return
+    except Exception as e:
+        print(f"\n  ip public: could not retrieve info ({e})\n")
+        return
+
+    if ip:
+        print(f"\n  Public IP:  {ip}")
+        print(f"  (via external lookup: api.ipify.org)\n")
+    else:
+        print("\n  Could not reach external service.")
+        print("  Check your internet connection and try again.\n")

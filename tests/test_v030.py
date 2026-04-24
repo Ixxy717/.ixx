@@ -660,11 +660,459 @@ class TestReplDo(unittest.TestCase):
         self.assertEqual(code, 0)  # exits clean but prints unknown message
         self.assertIn("Unknown", out)
 
-    def test_ixx_do_gpu_stub(self) -> None:
-        """A stub command should print not-implemented, not crash."""
-        code, out = cli("do", "gpu")
+    def test_ixx_do_disk_health_stub(self) -> None:
+        """disk health is still a stub (requires admin SMART access)."""
+        code, out = cli("do", "disk health")
         self.assertEqual(code, 0)
         self.assertIn("not yet implemented", out)
+
+
+# =============================================================================
+# Banner
+# =============================================================================
+
+class TestBannerOutput(unittest.TestCase):
+    """show_banner() renders correctly; run_command_once() skips it."""
+
+    def _capture_banner(self, version: str = "0.3.0-dev") -> str:
+        from ixx.shell.renderer import show_banner
+        buf = io.StringIO()
+        with patch("sys.stdout", buf):
+            show_banner(version)
+        return buf.getvalue()
+
+    def test_banner_contains_ixx_shell(self) -> None:
+        out = self._capture_banner()
+        self.assertIn("IXX Shell", out)
+
+    def test_banner_contains_version(self) -> None:
+        out = self._capture_banner("9.9.9")
+        self.assertIn("9.9.9", out)
+
+    def test_banner_contains_slogan(self) -> None:
+        out = self._capture_banner()
+        self.assertIn("The language for the user", out)
+
+    def test_banner_contains_help_hint(self) -> None:
+        out = self._capture_banner()
+        self.assertIn("help", out.lower())
+
+    def test_run_command_once_has_no_banner(self) -> None:
+        from ixx.shell.repl import run_command_once
+        buf = io.StringIO()
+        with patch("sys.stdout", buf):
+            run_command_once("disk health")  # runs a stub, no banner
+        out = buf.getvalue()
+        self.assertNotIn("IXX Shell", out)
+        self.assertNotIn("The language for the user", out)
+
+
+# =============================================================================
+# New hardware commands
+# =============================================================================
+
+class TestNewHardwareCommands(unittest.TestCase):
+    """Test new hardware handlers with a mocked platform adapter."""
+
+    def _mock_platform(self):
+        mock = MagicMock()
+        mock.get_cpu_info.return_value = {
+            "name": "Test CPU", "cores": "4", "threads": "8", "usage_pct": "10%",
+        }
+        mock.get_cpu_speed.return_value = {"name": "Test CPU", "speed_mhz": 3600}
+        mock.get_cpu_temperature.return_value = [
+            {"zone": "TZ00", "celsius": 45.0},
+            {"zone": "TZ01", "celsius": 47.5},
+        ]
+        mock.get_ram_info.return_value = {
+            "total_bytes": 16 * 1024**3,
+            "used_bytes":  6 * 1024**3,
+            "free_bytes":  10 * 1024**3,
+        }
+        mock.get_ram_speed.return_value = {"speed_mhz": 3200}
+        mock.get_gpu_info.return_value = [
+            {"name": "Test GPU", "vram_bytes": 8 * 1024**3, "driver": "99.0.1"},
+        ]
+        return mock
+
+    def _run(self, handler_fn, args=None):
+        from ixx.shell import platform as _platform
+        mock = self._mock_platform()
+        buf = io.StringIO()
+        with patch.object(_platform, "current", return_value=mock):
+            with patch("sys.stdout", buf):
+                handler_fn(args or [])
+        return buf.getvalue()
+
+    def test_cpu_info_contains_name(self) -> None:
+        from ixx.shell.commands.hardware import handle_cpu_info
+        out = self._run(handle_cpu_info)
+        self.assertIn("Test CPU", out)
+
+    def test_cpu_info_contains_cores(self) -> None:
+        from ixx.shell.commands.hardware import handle_cpu_info
+        out = self._run(handle_cpu_info)
+        self.assertIn("Cores", out)
+
+    def test_cpu_info_contains_speed(self) -> None:
+        from ixx.shell.commands.hardware import handle_cpu_info
+        out = self._run(handle_cpu_info)
+        self.assertIn("GHz", out)
+
+    def test_cpu_speed_output(self) -> None:
+        from ixx.shell.commands.hardware import handle_cpu_speed
+        out = self._run(handle_cpu_speed)
+        self.assertIn("GHz", out)
+
+    def test_cpu_temperature_shows_zones(self) -> None:
+        from ixx.shell.commands.hardware import handle_cpu_temperature
+        out = self._run(handle_cpu_temperature)
+        self.assertIn("°C", out)
+        self.assertIn("45.0", out)
+
+    def test_cpu_temperature_unavailable(self) -> None:
+        from ixx.shell.commands.hardware import handle_cpu_temperature
+        from ixx.shell import platform as _platform
+        mock = self._mock_platform()
+        mock.get_cpu_temperature.return_value = []
+        buf = io.StringIO()
+        with patch.object(_platform, "current", return_value=mock):
+            with patch("sys.stdout", buf):
+                handle_cpu_temperature([])
+        self.assertIn("not available", buf.getvalue().lower())
+
+    def test_ram_free_output(self) -> None:
+        from ixx.shell.commands.hardware import handle_ram_free
+        out = self._run(handle_ram_free)
+        self.assertIn("Free", out)
+
+    def test_ram_usage_output(self) -> None:
+        from ixx.shell.commands.hardware import handle_ram_usage
+        out = self._run(handle_ram_usage)
+        self.assertIn("Used", out)
+        self.assertIn("%", out)
+
+    def test_ram_speed_output(self) -> None:
+        from ixx.shell.commands.hardware import handle_ram_speed
+        out = self._run(handle_ram_speed)
+        self.assertIn("3200", out)
+
+    def test_gpu_output(self) -> None:
+        from ixx.shell.commands.hardware import handle_gpu
+        out = self._run(handle_gpu)
+        self.assertIn("Test GPU", out)
+
+    def test_gpu_vram_output(self) -> None:
+        from ixx.shell.commands.hardware import handle_gpu_vram
+        out = self._run(handle_gpu_vram)
+        self.assertIn("VRAM", out)
+        self.assertIn("GB", out)
+
+    def test_gpu_driver_output(self) -> None:
+        from ixx.shell.commands.hardware import handle_gpu_driver
+        out = self._run(handle_gpu_driver)
+        self.assertIn("Driver", out)
+        self.assertIn("99.0.1", out)
+
+    def test_hardware_platform_unavailable(self) -> None:
+        from ixx.shell.commands.hardware import handle_cpu_info, handle_gpu
+        from ixx.shell import platform as _platform
+        mock = MagicMock()
+        mock.get_cpu_info.side_effect = NotImplementedError
+        mock.get_cpu_speed.side_effect = NotImplementedError
+        mock.get_gpu_info.side_effect = NotImplementedError
+        buf = io.StringIO()
+        with patch.object(_platform, "current", return_value=mock):
+            with patch("sys.stdout", buf):
+                handle_cpu_info([])
+                handle_gpu([])
+        out = buf.getvalue()
+        self.assertIn("not yet available", out)
+
+
+# =============================================================================
+# New network commands
+# =============================================================================
+
+class TestNewNetworkCommands(unittest.TestCase):
+    """Test handle_wifi and handle_ip_public."""
+
+    def test_wifi_connected(self) -> None:
+        from ixx.shell.commands.network import handle_wifi
+        from ixx.shell import platform as _platform
+        mock = MagicMock()
+        mock.get_wifi_info.return_value = {
+            "ssid": "MyNetwork", "signal": "85%", "ipv4": "192.168.1.42", "adapter": "Wi-Fi",
+        }
+        buf = io.StringIO()
+        with patch.object(_platform, "current", return_value=mock):
+            with patch("sys.stdout", buf):
+                handle_wifi([])
+        out = buf.getvalue()
+        self.assertIn("MyNetwork", out)
+        self.assertIn("85%", out)
+        self.assertIn("192.168.1.42", out)
+
+    def test_wifi_not_connected(self) -> None:
+        from ixx.shell.commands.network import handle_wifi
+        from ixx.shell import platform as _platform
+        mock = MagicMock()
+        mock.get_wifi_info.return_value = {}
+        buf = io.StringIO()
+        with patch.object(_platform, "current", return_value=mock):
+            with patch("sys.stdout", buf):
+                handle_wifi([])
+        self.assertIn("No Wi-Fi", buf.getvalue())
+
+    def test_ip_public_online(self) -> None:
+        from ixx.shell.commands.network import handle_ip_public
+        from ixx.shell import platform as _platform
+        mock = MagicMock()
+        mock.get_public_ip.return_value = "1.2.3.4"
+        buf = io.StringIO()
+        with patch.object(_platform, "current", return_value=mock):
+            with patch("sys.stdout", buf):
+                handle_ip_public([])
+        out = buf.getvalue()
+        self.assertIn("1.2.3.4", out)
+        self.assertIn("ipify", out)
+
+    def test_ip_public_offline(self) -> None:
+        from ixx.shell.commands.network import handle_ip_public
+        from ixx.shell import platform as _platform
+        mock = MagicMock()
+        mock.get_public_ip.return_value = None
+        buf = io.StringIO()
+        with patch.object(_platform, "current", return_value=mock):
+            with patch("sys.stdout", buf):
+                handle_ip_public([])
+        self.assertIn("Could not reach", buf.getvalue())
+
+
+# =============================================================================
+# New system commands
+# =============================================================================
+
+class TestNewSystemCommands(unittest.TestCase):
+    """Test handle_ports, handle_processes, handle_disk_partitions."""
+
+    def _run(self, handler_fn, platform_data: dict, args=None):
+        from ixx.shell import platform as _platform
+        mock = MagicMock()
+        for attr, val in platform_data.items():
+            getattr(mock, attr).return_value = val
+        buf = io.StringIO()
+        with patch.object(_platform, "current", return_value=mock):
+            with patch("sys.stdout", buf):
+                handler_fn(args or [])
+        return buf.getvalue()
+
+    def test_ports_shows_port_header(self) -> None:
+        from ixx.shell.commands.system import handle_ports
+        out = self._run(handle_ports, {"get_ports": [
+            {"port": 80, "pid": 4, "process": "System"},
+            {"port": 443, "pid": 4, "process": "System"},
+        ]})
+        self.assertIn("Port", out)
+        self.assertIn("80", out)
+
+    def test_ports_empty(self) -> None:
+        from ixx.shell.commands.system import handle_ports
+        out = self._run(handle_ports, {"get_ports": []})
+        self.assertIn("no listening", out.lower())
+
+    def test_processes_shows_name_and_pid(self) -> None:
+        from ixx.shell.commands.system import handle_processes
+        out = self._run(handle_processes, {"get_processes": [
+            {"name": "chrome", "pid": 1234, "cpu": "2.0s", "ram_bytes": 200 * 1024**2},
+        ]})
+        self.assertIn("chrome", out)
+        self.assertIn("1234", out)
+        self.assertIn("RAM", out)
+
+    def test_disk_partitions_shows_drive(self) -> None:
+        from ixx.shell.commands.system import handle_disk_partitions
+        out = self._run(handle_disk_partitions, {"get_disk_partitions": [
+            {"letter": "C:", "size_bytes": 500 * 1024**3, "type": "Basic"},
+        ]})
+        self.assertIn("Drive", out)
+        self.assertIn("C:", out)
+
+
+# =============================================================================
+# find file
+# =============================================================================
+
+class TestFindFile(unittest.TestCase):
+    """Test handle_find_file with a real temp directory."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        # Create some test files
+        Path(self.tmpdir, "report.pdf").write_text("pdf")
+        Path(self.tmpdir, "invoice.txt").write_text("txt")
+        Path(self.tmpdir, "photo.png").write_text("png")
+        sub = Path(self.tmpdir, "subdir")
+        sub.mkdir()
+        Path(sub, "nested.txt").write_text("nested")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _run(self, *args):
+        from ixx.shell.commands.files import handle_find_file
+        buf = io.StringIO()
+        # Patch cwd so bare searches use the temp dir
+        with patch("pathlib.Path.cwd", return_value=Path(self.tmpdir)):
+            with patch("sys.stdout", buf):
+                handle_find_file(list(args))
+        return buf.getvalue()
+
+    def test_find_txt_files(self) -> None:
+        out = self._run("*.txt")
+        self.assertIn("invoice.txt", out)
+        self.assertIn("nested.txt", out)
+        self.assertNotIn("report.pdf", out)
+
+    def test_find_by_name_fragment(self) -> None:
+        out = self._run("invoice")
+        self.assertIn("invoice.txt", out)
+
+    def test_no_matches_message(self) -> None:
+        out = self._run("*.xyz")
+        self.assertIn("No files", out)
+
+    def test_find_in_alias_path(self) -> None:
+        from ixx.shell.commands.files import handle_find_file
+        buf = io.StringIO()
+        # Patch resolve at the import site inside files.py
+        with patch("ixx.shell.commands.files.resolve", return_value=Path(self.tmpdir)):
+            with patch("sys.stdout", buf):
+                handle_find_file(["*.txt", "in", "here"])
+        out = buf.getvalue()
+        self.assertIn("invoice.txt", out)
+
+    def test_no_args_shows_usage(self) -> None:
+        out = self._run()
+        self.assertIn("Usage", out)
+
+
+# =============================================================================
+# Unknown subcommand guard
+# =============================================================================
+
+class TestUnknownSubcommand(unittest.TestCase):
+    """cpu temp should show unknown-option message, not the cpu overview."""
+
+    def _run(self, *cmd):
+        from ixx.shell.repl import run_command_once
+        from ixx.shell import platform as _platform
+        mock = MagicMock()
+        mock.get_cpu_info.return_value = {
+            "name": "Test CPU", "cores": "4", "threads": "8", "usage_pct": "5%",
+        }
+        mock.get_cpu_speed.return_value = {"name": "Test CPU", "speed_mhz": 3600}
+        buf = io.StringIO()
+        with patch.object(_platform, "current", return_value=mock):
+            with patch("sys.stdout", buf):
+                run_command_once(" ".join(cmd))
+        return buf.getvalue()
+
+    def test_cpu_temp_shows_unknown_option(self) -> None:
+        out = self._run("cpu", "temp")
+        self.assertIn("Unknown option", out)
+
+    def test_cpu_temp_does_not_run_cpu_handler(self) -> None:
+        out = self._run("cpu", "temp")
+        self.assertNotIn("Cores", out)
+
+    def test_cpu_temp_suggests_temperature(self) -> None:
+        out = self._run("cpu", "temp")
+        self.assertIn("temperature", out)
+
+    def test_ram_fre_suggests_free(self) -> None:
+        out = self._run("ram", "fre")
+        self.assertIn("Unknown option", out)
+        self.assertIn("free", out)
+
+    def test_disk_xyz_shows_unknown_option(self) -> None:
+        out = self._run("disk", "xyz")
+        self.assertIn("Unknown option", out)
+
+
+# =============================================================================
+# Case-insensitive commands
+# =============================================================================
+
+class TestCaseInsensitive(unittest.TestCase):
+    """CPU, Ip, DISK should work the same as cpu, ip, disk."""
+
+    def _run(self, *cmd):
+        from ixx.shell.repl import run_command_once
+        from ixx.shell import platform as _platform
+        mock = MagicMock()
+        mock.get_cpu_info.return_value = {
+            "name": "Test CPU", "cores": "4", "threads": "8", "usage_pct": "5%",
+        }
+        mock.get_cpu_speed.return_value = {"name": "Test CPU", "speed_mhz": 3200}
+        mock.get_ip_info.return_value = [{"adapter": "Wi-Fi", "ipv4": "192.168.1.1"}]
+        mock.get_disk_info.return_value = [{
+            "drive": "C:", "label": "", "total_bytes": 500 * 1024**3,
+            "free_bytes": 200 * 1024**3, "used_bytes": 300 * 1024**3,
+        }]
+        buf = io.StringIO()
+        with patch.object(_platform, "current", return_value=mock):
+            with patch("sys.stdout", buf):
+                run_command_once(" ".join(cmd))
+        return buf.getvalue()
+
+    def test_CPU_uppercase(self) -> None:
+        out = self._run("CPU")
+        self.assertIn("Test CPU", out)
+        self.assertNotIn("Unknown", out)
+
+    def test_Ip_mixed_case(self) -> None:
+        out = self._run("Ip")
+        self.assertNotIn("Unknown", out)
+
+    def test_DISK_uppercase(self) -> None:
+        out = self._run("DISK")
+        self.assertNotIn("Unknown", out)
+        self.assertIn("C:", out)
+
+
+# =============================================================================
+# 172.x network classification
+# =============================================================================
+
+class TestNetworkClassification(unittest.TestCase):
+    """_classify_adapter should correctly handle RFC 1918 172.16/12 range."""
+
+    def _classify(self, name: str, ip: str) -> str:
+        from ixx.shell.commands.network import _classify_adapter
+        return _classify_adapter(name, ip)
+
+    def test_172_16_is_not_virtual(self) -> None:
+        self.assertNotEqual(self._classify("Ethernet", "172.16.5.1"), "virtual")
+
+    def test_172_31_is_not_virtual(self) -> None:
+        self.assertNotEqual(self._classify("Ethernet", "172.31.255.1"), "virtual")
+
+    def test_172_20_is_not_virtual(self) -> None:
+        self.assertNotEqual(self._classify("Ethernet", "172.20.10.5"), "virtual")
+
+    def test_172_15_is_virtual(self) -> None:
+        self.assertEqual(self._classify("SomeAdapter", "172.15.0.1"), "virtual")
+
+    def test_172_32_is_virtual(self) -> None:
+        self.assertEqual(self._classify("SomeAdapter", "172.32.0.1"), "virtual")
+
+    def test_169_254_is_link_local(self) -> None:
+        self.assertEqual(self._classify("Ethernet", "169.254.1.1"), "link-local")
+
+    def test_192_168_56_is_virtual(self) -> None:
+        self.assertEqual(self._classify("VirtualBox", "192.168.56.1"), "virtual")
 
 
 if __name__ == "__main__":

@@ -456,7 +456,7 @@ class TestCLI(unittest.TestCase):
     def test_version(self):
         code, out = cli("version")
         self.assertEqual(code, 0)
-        self.assertIn("0.3.0", out)
+        self.assertIn("0.3.", out)
 
     def test_help_contains_usage(self):
         code, out = cli("help")
@@ -520,6 +520,8 @@ class TestCLI(unittest.TestCase):
             [sys.executable, "-m", "ixx", "shell"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             input="exit\n",
             cwd=str(ROOT),
             timeout=10,

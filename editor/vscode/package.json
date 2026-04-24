@@ -1,0 +1,51 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vscode/main/src/vs/vscode.d.ts",
+  "name": "ixx-language",
+  "displayName": "IXX Language",
+  "description": "Syntax highlighting for IXX (.ixx) source files. Registers .ixx as IXX, not C++.",
+  "version": "0.3.0",
+  "publisher": "ixx",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "icon": "icons/ixx-icon-128.png",
+  "keywords": [
+    "ixx",
+    "executable checklist",
+    "scripting"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ixxy717/.ixx"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "ixx",
+        "aliases": [
+          "IXX",
+          "ixx"
+        ],
+        "extensions": [
+          ".ixx"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/ixx-icon-32.png",
+          "dark": "./icons/ixx-icon-32.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "ixx",
+        "scopeName": "source.ixx",
+        "path": "./syntaxes/ixx.tmLanguage.json"
+      }
+    ]
+  }
+}

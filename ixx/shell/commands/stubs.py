@@ -17,17 +17,30 @@ from ..registry import CommandNode, CommandRegistry
 from ..renderer import show_not_implemented
 
 # Live handlers (v0.3.0)
-from .hardware import handle_cpu, handle_cpu_cores, handle_ram
+from .hardware import (
+    handle_cpu, handle_cpu_cores, handle_cpu_info, handle_cpu_speed,
+    handle_cpu_temperature,
+    handle_ram, handle_ram_free, handle_ram_usage, handle_ram_speed,
+    handle_gpu, handle_gpu_vram, handle_gpu_driver,
+)
 from .network import (
     handle_ip,
     handle_ip_all,
     handle_ip_wifi,
     handle_ip_ethernet,
     handle_ip_local,
+    handle_ip_public,
     handle_network,
+    handle_wifi,
+    handle_ethernet,
 )
-from .system import handle_disk, handle_disk_space
-from .files import handle_folder_size, handle_open, handle_list
+from .system import (
+    handle_disk, handle_disk_space, handle_disk_partitions,
+    handle_ports, handle_processes,
+)
+from .files import handle_folder_size, handle_open, handle_list, handle_find_file
+from .setup import handle_setup
+from .demo_walk import handle_demo_walk
 
 
 # ---------------------------------------------------------------------------
@@ -57,23 +70,35 @@ def _build_cpu() -> CommandNode:
             "core-count": CommandNode(
                 "core-count",
                 description="Core and thread count",
+                aliases=["cores", "threads"],
                 examples=["cpu core-count"],
                 handler=handle_cpu_cores,
             ),
-            "temperature": CommandNode(
-                "temperature",
-                description="CPU temperature (if available)",
-                handler=_stub("cpu temperature"),
+            "info": CommandNode(
+                "info",
+                description="Full CPU summary (name, cores, speed, usage)",
+                examples=["cpu info"],
+                handler=handle_cpu_info,
             ),
             "speed": CommandNode(
                 "speed",
                 description="CPU clock speed",
-                handler=_stub("cpu speed"),
+                examples=["cpu speed"],
+                handler=handle_cpu_speed,
             ),
-            "info": CommandNode(
-                "info",
-                description="Full CPU summary",
-                handler=_stub("cpu info"),
+            "temperature": CommandNode(
+                "temperature",
+                description="CPU temperature (if available)",
+                aliases=["temp"],
+                examples=["cpu temperature"],
+                handler=handle_cpu_temperature,
+            ),
+            "usage": CommandNode(
+                "usage",
+                description="CPU usage percentage (alias: used, load)",
+                aliases=["used", "load"],
+                examples=["cpu usage"],
+                handler=handle_cpu,
             ),
         },
     )
@@ -83,6 +108,7 @@ def _build_ram() -> CommandNode:
     return CommandNode(
         "ram",
         description="Total, used, and free RAM",
+        aliases=["memory"],
         examples=["ram"],
         handler=handle_ram,
         executable_with_children=True,
@@ -90,17 +116,28 @@ def _build_ram() -> CommandNode:
             "free": CommandNode(
                 "free",
                 description="Free RAM available",
-                handler=_stub("ram free"),
+                aliases=["available", "avail"],
+                examples=["ram free"],
+                handler=handle_ram_free,
             ),
             "usage": CommandNode(
                 "usage",
                 description="RAM usage percentage",
-                handler=_stub("ram usage"),
+                aliases=["used", "consumed"],
+                examples=["ram usage"],
+                handler=handle_ram_usage,
+            ),
+            "total": CommandNode(
+                "total",
+                description="Total installed RAM (shows full overview)",
+                examples=["ram total"],
+                handler=handle_ram,
             ),
             "speed": CommandNode(
                 "speed",
                 description="RAM speed (MHz)",
-                handler=_stub("ram speed"),
+                examples=["ram speed"],
+                handler=handle_ram_speed,
             ),
         },
     )
@@ -109,9 +146,24 @@ def _build_ram() -> CommandNode:
 def _build_gpu() -> CommandNode:
     return CommandNode(
         "gpu",
-        description="GPU name, VRAM, usage, driver",
-        examples=["gpu"],
-        handler=_stub("gpu"),
+        description="GPU name, VRAM, and driver",
+        examples=["gpu", "gpu vram", "gpu driver"],
+        handler=handle_gpu,
+        executable_with_children=True,
+        subcommands={
+            "vram": CommandNode(
+                "vram",
+                description="GPU VRAM size",
+                examples=["gpu vram"],
+                handler=handle_gpu_vram,
+            ),
+            "driver": CommandNode(
+                "driver",
+                description="GPU driver version",
+                examples=["gpu driver"],
+                handler=handle_gpu_driver,
+            ),
+        },
     )
 
 
@@ -119,6 +171,7 @@ def _build_disk() -> CommandNode:
     return CommandNode(
         "disk",
         description="List disks, space, and health",
+        aliases=["storage", "drive", "drives"],
         examples=["disk", "disk space"],
         handler=handle_disk,
         executable_with_children=True,
@@ -126,19 +179,21 @@ def _build_disk() -> CommandNode:
             "space": CommandNode(
                 "space",
                 description="Used and free space per disk",
+                aliases=["free", "usage", "used"],
                 examples=["disk space"],
                 handler=handle_disk_space,
+            ),
+            "partitions": CommandNode(
+                "partitions",
+                description="Partition table",
+                examples=["disk partitions"],
+                handler=handle_disk_partitions,
             ),
             "health": CommandNode(
                 "health",
                 description="SMART health status",
                 handler=_stub("disk health"),
                 requires_admin=True,
-            ),
-            "partitions": CommandNode(
-                "partitions",
-                description="Partition table",
-                handler=_stub("disk partitions"),
             ),
         },
     )
@@ -184,19 +239,29 @@ def _build_ip() -> CommandNode:
             ),
             "public": CommandNode(
                 "public",
-                description="Public-facing IP address",
-                handler=_stub("ip public"),
+                description="Public-facing IP address (external lookup)",
+                examples=["ip public"],
+                handler=handle_ip_public,
             ),
         },
+    )
+
+
+def _build_ethernet() -> CommandNode:
+    return CommandNode(
+        "ethernet",
+        description="Show Ethernet IPv4 address",
+        examples=["ethernet"],
+        handler=handle_ethernet,
     )
 
 
 def _build_wifi() -> CommandNode:
     return CommandNode(
         "wifi",
-        description="Wi-Fi name, IP, signal strength",
+        description="Wi-Fi name, IP, and signal strength",
         examples=["wifi"],
-        handler=_stub("wifi"),
+        handler=handle_wifi,
     )
 
 
@@ -205,16 +270,16 @@ def _build_ports() -> CommandNode:
         "ports",
         description="Listening ports in a readable table",
         examples=["ports"],
-        handler=_stub("ports"),
+        handler=handle_ports,
     )
 
 
 def _build_processes() -> CommandNode:
     return CommandNode(
         "processes",
-        description="Running processes",
+        description="Running processes (top 30 by RAM)",
         examples=["processes"],
-        handler=_stub("processes"),
+        handler=handle_processes,
     )
 
 
@@ -268,12 +333,12 @@ def _build_find() -> CommandNode:
             "file": CommandNode(
                 "file",
                 description="Search for files by name or pattern",
-                arg_hint='<name or pattern> [in <path>]',
+                arg_hint='<pattern> [in <path>]',
                 examples=[
                     'find file "invoice"',
                     'find file "*.pdf" in downloads',
                 ],
-                handler=_stub("find file"),
+                handler=handle_find_file,
             ),
         },
     )
@@ -371,6 +436,24 @@ def _build_delete() -> CommandNode:
     )
 
 
+def _build_demo() -> CommandNode:
+    return CommandNode(
+        "demo",
+        description="Interactive IXX walkthrough — learn the language step by step",
+        examples=["demo"],
+        handler=handle_demo_walk,
+    )
+
+
+def _build_setup() -> CommandNode:
+    return CommandNode(
+        "setup",
+        description="Register .ixx file type and icon on Windows",
+        examples=["setup"],
+        handler=handle_setup,
+    )
+
+
 def _build_native() -> CommandNode:
     return CommandNode(
         "native",
@@ -437,6 +520,7 @@ def register_all(registry: CommandRegistry) -> None:
         _build_network(),
         _build_ip(),
         _build_wifi(),
+        _build_ethernet(),
         _build_ports(),
         _build_processes(),
         _build_kill(),
@@ -447,6 +531,8 @@ def register_all(registry: CommandRegistry) -> None:
         _build_copy(),
         _build_move(),
         _build_delete(),
+        _build_demo(),
+        _build_setup(),
         _build_native(),
         _build_ssh(),
         _build_servers(),

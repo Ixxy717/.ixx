@@ -25,7 +25,9 @@ IXX is two things in one package:
 
 **A small programming language** that looks like a checklist or a set of plain instructions. It uses real English words for comparisons, visible dash characters to show block structure, and `say` to print. It does not require a main function, curly braces, indentation rules, or semicolons.
 
-**An interactive shell** that wraps everyday system tasks — network info, hardware info, disk info, file operations — in the same readable syntax, hiding the native command ugliness underneath.
+**An interactive command shell** designed to replace the everyday parts of PowerShell, CMD, Bash, and macOS Terminal with a single consistent syntax. System queries, file operations, network info, and hardware info all answer in plain readable output. The same commands work the same way regardless of which OS is underneath.
+
+IXX's long-term goal is to be the one command interface people actually reach for instead of memorizing the syntax differences between `ipconfig`, `ip addr`, `Get-NetIPAddress`, and `ifconfig` — and everything else like them.
 
 Both halves share the same identity: readable, calm, obvious output.
 
@@ -994,20 +996,22 @@ The current runtime is Python with the Lark parser library. Python is the **prot
 
 ## 9. Long-term vision
 
-IXX should eventually be a single command console that covers the useful everyday parts of PowerShell, CMD, Bash, Linux shells, macOS terminal, and SSH administration — all in one consistent syntax.
+IXX's endgame is to be a single command console that covers the useful everyday parts of PowerShell, CMD, Bash, Linux shells, macOS terminal, and SSH administration — all in one consistent syntax, on any machine.
 
-The goal is not to replace those tools for power users. The goal is to give everyone else a single, calm interface for the tasks they actually do every day.
+The goal is not to be a scripting language for DevOps pipelines or a replacement for Python in production software. The goal is to give everyone — not just developers — a single, calm interface for every task they actually do on a computer every day: check what's using RAM, find a file, see the IP, copy something, manage a disk, reach a remote server.
 
-### Planned command categories
+IXX should be the thing you open instead of Google-searching "how do I check disk space in PowerShell."
 
-**System info** (partial in v0.3.0)
+### Command categories — near term
+
+**System info** (partial in v0.3.x)
 ```
-cpu    ram    gpu    disk    disk health
+cpu    ram    gpu    disk    disk health    temps    uptime
 ```
 
-**Network** (partial in v0.3.0)
+**Network** (partial in v0.3.x)
 ```
-ip    ip wifi    network    ports
+ip    ip wifi    ethernet    network    ports    wifi
 ```
 
 **Processes**
@@ -1015,7 +1019,7 @@ ip    ip wifi    network    ports
 processes    kill process chrome
 ```
 
-**Files** (partial in v0.3.0)
+**Files** (partial in v0.3.x)
 ```
 list    open    folder size    find file
 copy report.pdf to desktop
@@ -1029,7 +1033,7 @@ services    restart service nginx
 logs    tail logs nginx
 ```
 
-**Remote / SSH** (stubs in v0.3.0, implementation planned v0.5.0+)
+**Remote / SSH** (stubs in v0.3.x, implementation planned v0.5.0+)
 ```
 ssh user@192.168.1.50
 ssh my-server
@@ -1051,14 +1055,20 @@ ixx>                   local
 ixx my-server>         connected remote shell
 ```
 
+### Language evolution
+
+IXX the language will grow alongside the shell. Functions are the next major language feature (v0.4.0), enabling reusable logic, parameterised scripts, and eventually callable shell macros.
+
+After functions: modules, standard library integration, and the ability to author IXX scripts that feel like real programs rather than one-off notes.
+
 ### Staged roadmap
 
 | Version | Theme                        | Key additions                                              |
 |---------|------------------------------|------------------------------------------------------------|
 | v0.1.0  | Language prototype           | IXX language, syntax, interpreter, 98 tests               |
 | v0.2.0  | Shell skeleton               | REPL, guidance, fuzzy correction, stub commands            |
-| v0.3.0  | First real commands          | ip, cpu, ram, disk, folder, open, list — Windows real      |
-| v0.4.0  | Files and processes          | copy/move with safety, find file, ports, processes, native |
+| v0.3.x  | First real commands          | ip, cpu, ram, disk, folder, open, list, aliases, ethernet  |
+| v0.4.0  | Functions + files            | IXX functions, copy/move, find file, processes, ports      |
 | v0.5.0  | Remote access                | SSH profiles, run on server, saved targets                 |
 | v0.6.0+ | Services, packages, scripting| systemctl/services, logs, docker helpers, repair tools     |
 
@@ -1072,15 +1082,15 @@ The goal is `ixx` works out of the box on any machine, with no Python, no Lark, 
 
 ## 10. What IXX is not
 
-- **Not trying to replace every advanced use case.** For now, if you need complex libraries, algorithms, or production-scale software, Python, Go, or Rust are still the right tools. IXX's first goal is simple scripts and everyday system control.
+- **Not just an everyday helper.** IXX is aiming to be a full replacement command layer. The goal is not a better `ipconfig` wrapper — it is a consistent shell that makes the relevant parts of every shell redundant for everyday use.
 
-- **Not trying to copy every PowerShell feature.** IXX aims to replace the annoying everyday layer first. Deep platform-specific administration can still use native tools when needed, but IXX should eventually cover the common useful workflows cleanly.
+- **Not trying to clone every advanced use case.** For production-scale software, complex algorithms, or deep OS scripting, Python, Go, and Rust are still the right tools. IXX's constraint is readability: it handles the things where readability matters most.
 
-- **Not a Bash replacement for DevOps.** IXX does not aim to replace pipeline-heavy shell scripting or CI automation.
+- **Not a Bash replacement for DevOps pipelines.** IXX does not aim to replace CI automation, complex pipe chains, or deeply Unix-flavoured shell scripting. It aims to replace the parts of those tools that normal users reach for daily.
 
-- **Not a configuration language.** IXX is an imperative language for logic and commands, not a declarative config format.
+- **Not a configuration language.** IXX is imperative — logic and commands — not declarative config.
 
-- **Not trying to have the most features.** The design constraint is to stay readable. If a feature makes the language harder to read at a glance, it does not belong.
+- **Not trying to have the most features.** The design constraint is to stay readable. If a feature makes the language harder to read at a glance, it does not belong in the core.
 
 - **Not trying to be clever.** No magic inference, no implicit type coercion weirdness, no surprising operator overloading. IXX does what it says.
 
@@ -1088,4 +1098,4 @@ The goal is `ixx` works out of the box on any machine, with no Python, no Lark, 
 
 ## The one-sentence version
 
-IXX is a language that feels like executable notes — readable, obvious, and actually usable for real things without needing to be a programmer.
+IXX is a replacement command layer — readable scripts, readable shell, one syntax, every machine.

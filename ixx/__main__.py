@@ -15,10 +15,11 @@ import sys
 import os
 import re
 import difflib
+from pathlib import Path
 
-VERSION = "0.3.0-dev"
+from ._version import VERSION
 
-_KNOWN_COMMANDS = ["run", "check", "version", "help", "shell", "do"]
+_KNOWN_COMMANDS = ["run", "check", "version", "help", "shell", "do", "setup", "demo"]
 
 HELP_TEXT = """
 IXX - executable checklist-style code
@@ -32,6 +33,7 @@ Usage:
   ixx                     open the IXX interactive shell
   ixx shell               open the IXX interactive shell
   ixx do "ip wifi"        run one shell command and exit
+  ixx demo                run the built-in demo script
 
 Language quick-reference:
   say "Hello World"
@@ -227,12 +229,36 @@ def _run_file(path: str, check_only: bool = False) -> None:
         sys.exit(1)
 
 
+def _first_run_setup() -> None:
+    """On Windows, silently run setup the first time ixx is invoked."""
+    if sys.platform != "win32":
+        return
+    sentinel = Path(os.environ.get("APPDATA", "~")) / "IXX" / ".setup-done"
+    if sentinel.exists():
+        return
+    try:
+        from .shell.commands.setup import handle_setup
+        handle_setup([])
+        sentinel.parent.mkdir(parents=True, exist_ok=True)
+        sentinel.touch()
+    except Exception:
+        pass  # Never block normal operation
+
+
 def main() -> None:
+    _first_run_setup()
     args = sys.argv[1:]
+
+    # Start update check in background immediately (skipped for version/help/setup/demo)
+    _NO_UPDATE_CMDS = {"version", "help", "--help", "-h", "setup", "demo"}
+    _check_updates = not args or args[0] not in _NO_UPDATE_CMDS
+    if _check_updates:
+        from .update_check import start as _uc_start
+        _uc_start(VERSION)
 
     if not args:
         from .shell.repl import run as _run_shell
-        _run_shell()
+        _run_shell()   # shell banner handles notify() internally
         return
 
     cmd = args[0]
@@ -253,6 +279,24 @@ def main() -> None:
         _run_shell()
         return
 
+    # --- ixx demo ---
+    if cmd == "demo":
+        import importlib.resources
+        try:
+            ref = importlib.resources.files("ixx.assets").joinpath("try-it.ixx")
+            with importlib.resources.as_file(ref) as p:
+                _run_file(str(p))
+        except (FileNotFoundError, ModuleNotFoundError, TypeError) as e:
+            print(f"ixx: demo file not found: {e}", file=sys.stderr)
+            sys.exit(1)
+        return
+
+    # --- ixx setup ---
+    if cmd == "setup":
+        from .shell.commands.setup import handle_setup
+        handle_setup([])
+        return
+
     # --- ixx do "<shell command>" ---
     if cmd == "do":
         if len(args) < 2:
@@ -270,6 +314,9 @@ def main() -> None:
                   file=sys.stderr)
             sys.exit(1)
         _run_file(args[1])
+        if _check_updates:
+            from .update_check import notify as _uc_notify
+            _uc_notify(VERSION)
         return
 
     # --- ixx check <file> ---
@@ -279,11 +326,17 @@ def main() -> None:
                   file=sys.stderr)
             sys.exit(1)
         _run_file(args[1], check_only=True)
+        if _check_updates:
+            from .update_check import notify as _uc_notify
+            _uc_notify(VERSION)
         return
 
     # --- ixx <file.ixx>  (shorthand run) ---
     if cmd.endswith(".ixx"):
         _run_file(cmd)
+        if _check_updates:
+            from .update_check import notify as _uc_notify
+            _uc_notify(VERSION)
         return
 
     # --- unknown command: suggest close matches ---

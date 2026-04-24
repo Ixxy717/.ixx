@@ -4,49 +4,69 @@ All notable changes to IXX are documented here.
 
 ---
 
-## [0.3.0-dev] — in progress (branch: v0.3.0-system-commands)
+## [0.3.0] — v0.3.0-system-commands
 
 First real-usefulness release. Shell commands now actually work on Windows.
 
 ### Added
 
-- **14 live command entries** — real implementations replacing stubs:
-  `ip`, `ip all`, `ip wifi`, `ip ethernet`, `ip local`, `network`,
-  `cpu`, `cpu core-count`, `ram`, `disk`, `disk space`,
-  `folder size`, `open`, `list`
-- **`shell/platform/`** — cross-platform adapter layer (`windows.py` real,
-  `linux.py` / `macos.py` stubs for later)
-- **`shell/paths.py`** — path alias system (`desktop`, `downloads`, `documents`,
-  `pictures`, `music`, `videos`, `home`, `temp`, `appdata`, `here`, `.`)
-- **`shell/safety.py`** — `format_bytes()` helper and `render_table()` renderer
-- **`shell/commands/hardware.py`** — `cpu`, `ram` handlers
-- **`shell/commands/network.py`** — `ip`, `network` handlers
-- **`shell/commands/system.py`** — `disk` handlers
-- **`shell/commands/files.py`** — `folder size`, `open`, `list` handlers
-- **`ixx do "command"`** — run one shell command and exit (`ixx do "ip wifi"`)
-- **`executable_with_children`** field on `CommandNode` — parent commands
-  (`ip`, `cpu`, `ram`, `disk`, `network`) now execute standalone AND keep
-  subcommands available
-- **SSH/server stubs** — `ssh`, `servers`, `server add`, `server list` registered
-  in the command tree; stub-only, no credentials or remote execution
+**New live command entries (this pass adds to the original 14):**
+- `cpu info` — full CPU summary (name, cores, threads, speed, usage)
+- `cpu speed` — CPU clock speed in GHz
+- `cpu temperature` — ACPI thermal zone temperatures; graceful "not available" if hardware doesn't expose them
+- `ram free` — free RAM
+- `ram usage` — used RAM with percentage
+- `ram speed` — RAM speed in MHz
+- `gpu` — GPU name, VRAM, and driver version
+- `gpu vram` — VRAM only
+- `gpu driver` — driver version only
+- `wifi` — standalone Wi-Fi: SSID, signal, IP
+- `ip public` — public-facing IP via external lookup (api.ipify.org); offline-safe
+- `ports` — listening TCP ports with owning process names
+- `processes` — top 30 running processes by RAM
+- `disk partitions` — partition table
+- `find file <pattern> [in <path>]` — recursive file search with path alias support
 
-### Changed
+**Shell improvements:**
+- **Branded startup banner** — Unicode box banner with "The language for the user." slogan; ASCII fallback for terminals that can't render box characters; not shown for `ixx do`
+- **`command ?` / `help command` / `command help`** — all three help forms supported
+- **Unknown subcommand guard** — `cpu temp` now shows "Unknown option for 'cpu': temp / Did you mean: cpu temperature?" instead of silently running the `cpu` handler
+- **Prefix matching** — abbreviations like `temp` match `temperature` even when difflib cutoff doesn't
+- **Case-insensitive commands** — `CPU`, `Ip`, `DISK` all work
 
-- `VERSION` bumped to `0.3.0-dev`
-- Stub messages updated from "coming in v0.3.0" to "planned for a future release"
-- `show_not_implemented()` accepts an optional `note` argument
-- `repl.py` gains `run_command_once()` for single-dispatch use
-- Windows console now configured for UTF-8 output on shell start
+**Platform adapter:**
+- `windows.py` now has: `get_cpu_speed`, `get_cpu_temperature`, `get_ram_speed`, `get_gpu_info`, `get_wifi_info`, `get_public_ip`, `get_ports`, `get_processes`, `get_disk_partitions`
+- `linux.py` and `macos.py` updated with `_not_yet()` stubs for all new functions
+
+**Original 14 live entries from earlier in v0.3.0:**
+- `ip`, `ip all`, `ip wifi`, `ip ethernet`, `ip local`, `network`
+- `cpu`, `cpu core-count`
+- `ram`, `disk`, `disk space`
+- `folder size`, `open`, `list`
+
+**Infrastructure:**
+- `shell/platform/` — cross-platform adapter layer
+- `shell/paths.py` — path alias system
+- `shell/safety.py` — `format_bytes()` and `render_table()`
+- `ixx do "command"` — single-dispatch CLI mode
+
+### Fixed
+
+- 172.16.x.x–172.31.x.x (RFC 1918 range) no longer mis-classified as "virtual" adapters
+- Subprocess test encoding fixed for Unicode banner output
+- `gpu` moved from stub to live
+
+### Still stubbed (deferred, all planned)
+
+- `disk health` — requires admin SMART access
+- `kill process`, `copy`, `move`, `delete` — destructive; safety flow not designed yet
+- `native` — shell passthrough
+- `ssh`, `server`, `servers` — remote access feature category
 
 ### Tests
 
-- **`tests/test_v030.py`** — 66 new tests covering path aliases, format helpers,
-  guidance model, command handlers (mocked platform), and `ixx do`
-- **Total: 218 tests passing** (98 language + 54 shell + 66 v0.3.0)
-
----
-
----
+- **`tests/test_v030.py`** — 46 new tests added this pass: `TestBannerOutput`, `TestNewHardwareCommands`, `TestNewNetworkCommands`, `TestNewSystemCommands`, `TestFindFile`, `TestUnknownSubcommand`, `TestCaseInsensitive`, `TestNetworkClassification`
+- **Total: 282 tests passing**
 
 ## [0.2.0-dev] — in progress (branch: v0.2.0-shell-planning)
 

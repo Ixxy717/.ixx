@@ -165,7 +165,10 @@ def _show_node_help(node: CommandNode) -> None:
         print("  Subcommands:")
         for name, child in node.subcommands.items():
             desc = f"  {_c(_DIM, child.description)}" if child.description else ""
-            print(f"    {_c(_CYAN, name)}{desc}")
+            alias_hint = ""
+            if child.aliases:
+                alias_hint = _c(_DIM, f"  (also: {', '.join(child.aliases)})")
+            print(f"    {_c(_CYAN, name)}{desc}{alias_hint}")
         print()
 
     if node.arg_hint:
@@ -176,6 +179,10 @@ def _show_node_help(node: CommandNode) -> None:
         print("  Examples:")
         for ex in node.examples:
             print(f"    {ex}")
+        print()
+
+    if node.aliases:
+        print(f"  Also accepts:  {', '.join(node.aliases)}")
         print()
 
     if node.destructive:
@@ -209,6 +216,49 @@ def show_unknown(word: str, suggestions: list[str]) -> None:
 def show_not_implemented(command_path: str, note: str = "planned for a future release") -> None:
     """Print the standard stub message for commands not yet wired up."""
     print(f"\n  [{_c(_DIM, f'{command_path}  -  not yet implemented, {note}')}]\n")
+
+
+def show_unknown_subcommand(parent: str, unknown: str, suggestions: list[str]) -> None:
+    """Print an error when a token after a parent command doesn't match any subcommand."""
+    print(f"\n  Unknown option for '{_c(_BOLD, parent)}': {_c(_BOLD, unknown)}")
+    if suggestions:
+        print(f"  Did you mean: {_c(_CYAN, parent + ' ' + suggestions[0])}?")
+    print(f"\n  Type '{_c(_CYAN, parent + ' ?')}' to see valid options.\n")
+
+
+# ---------------------------------------------------------------------------
+# Banner
+# ---------------------------------------------------------------------------
+
+_BANNER_SLOGAN = "The language for the user."
+_BANNER_WIDTH  = 40
+
+
+def _supports_unicode() -> bool:
+    """Return True if stdout can encode Unicode box-drawing characters."""
+    try:
+        "│".encode(getattr(sys.stdout, "encoding", None) or "utf-8")
+        return True
+    except (UnicodeEncodeError, LookupError):
+        return False
+
+
+def show_banner(version: str) -> None:
+    """Print the IXX Shell startup banner.  Called only for interactive shell startup."""
+    w = _BANNER_WIDTH
+    if _supports_unicode():
+        title   = f" IXX Shell {version}"
+        tagline = f" {_BANNER_SLOGAN}"
+        print(f"\n┌{'─' * w}┐")
+        print(f"│{title:<{w}}│")
+        print(f"│{tagline:<{w}}│")
+        print(f"└{'─' * w}┘")
+    else:
+        print(f"\n+{'-' * w}+")
+        print(f"| IXX Shell {version:<{w - 11}}|")
+        print(f"| {_BANNER_SLOGAN:<{w - 2}}|")
+        print(f"+{'-' * w}+")
+    print("\nType help for commands.  Type exit to leave.\n")
 
 
 def show_destructive_prompt(description: str) -> bool:

@@ -1,0 +1,3 @@
+# This folder is intentionally empty until assets/ixx-icon-source.png is added.
+# Run: python assets/generate_icons.py
+# to generate all icon sizes.

@@ -1,0 +1,9 @@
+# Place the generated icon files here before packaging the extension.
+#
+# After running: python assets/generate_icons.py
+# Copy:
+#   assets/generated/ixx-icon-32.png  -> editor/vscode/icons/ixx-icon-32.png
+#   assets/generated/ixx-icon-128.png -> editor/vscode/icons/ixx-icon-128.png
+#
+# ixx-icon-32.png  is used for the file icon in the editor tab / Explorer
+# ixx-icon-128.png is used as the extension marketplace icon

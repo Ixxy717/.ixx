@@ -366,11 +366,12 @@ class TestFullRegistry(unittest.TestCase):
                     self.fail(f"handler for '{node.name}' raised: {exc}")
 
     def test_stub_handler_prints_not_implemented(self) -> None:
-        # gpu is still a stub in v0.3.0
-        gpu = self.registry.get("gpu")
+        # disk health is still a stub in v0.3.0 (requires admin SMART access)
+        disk = self.registry.get("disk")
+        disk_health = disk.subcommands["health"]
         captured = io.StringIO()
         with patch("sys.stdout", captured):
-            gpu.handler([])
+            disk_health.handler([])
         self.assertIn("not yet implemented", captured.getvalue())
 
     def test_guidance_on_full_registry_cpu(self) -> None:

@@ -1,6 +1,11 @@
 # IXX
 
-IXX is executable checklist-style code. It uses plain English comparisons and visible dash blocks instead of braces, indentation, and symbolic clutter.
+IXX is a replacement command layer — readable scripts, readable shell, one syntax, every machine.
+
+It is two things in one package:
+
+- **A small language** that looks like a checklist. Plain English comparisons, visible dash blocks, no braces, no indentation rules.
+- **An interactive shell** that replaces the everyday parts of PowerShell, CMD, Bash, and macOS Terminal with a single consistent syntax.
 
 ```
 age = 19
@@ -9,6 +14,17 @@ if age less than 18
 - say "Not adult"
 else
 - say "Adult"
+```
+
+```
+ixx> ip wifi
+  Wi-Fi: 192.168.1.42
+
+ixx> memory used
+  Used:  15.5 GB  (50%)
+
+ixx> downloads size
+  downloads: 14.2 GB
 ```
 
 ---
@@ -190,6 +206,7 @@ Drive  Label   Total    Free
 C:     System  2.0 TB   870 GB
 
 ixx> disk space
+ixx> disk partitions
 ixx> folder size downloads
   downloads: 14.2 GB
 
@@ -197,6 +214,30 @@ ixx> open desktop
   Opened: C:\Users\you\Desktop
 
 ixx> list downloads
+
+ixx> gpu
+  GPU:     NVIDIA GeForce RTX 4070 SUPER
+  VRAM:    12.0 GB
+  Driver:  32.0.15.8157
+
+ixx> gpu vram
+ixx> cpu temperature
+ixx> cpu speed
+ixx> cpu info
+ixx> ram free
+ixx> ram speed
+ixx> wifi
+  Network:  MyNetwork
+  Signal:   90%
+  IP:       192.168.1.42
+
+ixx> ip public
+  Public IP:  203.0.113.5
+  (via external lookup: api.ipify.org)
+
+ixx> ports
+ixx> processes
+ixx> find file "*.pdf" in downloads
 ```
 
 Single-command mode (useful for scripts and automation):
@@ -204,14 +245,102 @@ Single-command mode (useful for scripts and automation):
 ```
 ixx do "ip"
 ixx do "cpu core-count"
+ixx do "gpu"
 ixx do "folder size downloads"
+ixx do "find file *.pdf in downloads"
 ```
 
 Notes:
-- v0.3.0 is Windows-first for real system commands.
+- v0.3.x is Windows-first for real system commands.
 - Cross-platform adapters (Linux, macOS) are planned for a future release.
 - Destructive commands (`delete`, `kill process`, `copy`, `move`) are still stubbed for safety.
 - The Python implementation is prototype v0 — not the final runtime.
+
+IXX also understands natural synonyms — you do not have to spell out the canonical command:
+
+```
+ixx> memory used          → same as: ram usage
+ixx> processor cores      → same as: cpu core-count
+ixx> wifi address         → same as: ip wifi
+ixx> downloads size       → same as: folder size downloads
+ixx> storage              → same as: disk
+```
+
+---
+
+## File extension
+
+IXX source files use the `.ixx` extension.
+
+```
+hello.ixx
+system-info.ixx
+deploy-checklist.ixx
+```
+
+> **Note:** `.ixx` is also used by C++20 module interface files. Some editors
+> may misdetect `.ixx` as C++. Install the editor support below to override
+> this association.
+
+---
+
+## Editor support
+
+IXX ships with syntax highlighting for VS Code and Notepad++, plus a Windows
+file icon.
+
+### VS Code
+
+The `editor/vscode/` folder contains a VS Code language extension that:
+
+- Registers `.ixx` as **IXX** (overriding C++ detection)
+- Highlights comments, strings, keywords, booleans, numbers, and operators
+- Highlights string interpolation (`{name}` inside double-quoted strings)
+- Configures `#` as the line comment character
+
+See [`editor/vscode/README.md`](editor/vscode/README.md) for installation
+instructions.
+
+### Notepad++
+
+The `editor/notepad-plus-plus/` folder contains a User Defined Language (UDL)
+XML for Notepad++ that highlights `.ixx` files with the same colour scheme.
+
+See [`editor/notepad-plus-plus/README.md`](editor/notepad-plus-plus/README.md)
+for step-by-step installation instructions.
+
+### Windows file icon
+
+The IXX icon asset lives in `assets/`:
+
+```
+assets/
+  ixx-icon-source.png       source image (673×673)
+  generate_icons.py         generates all sizes automatically
+  generated/
+    ixx-icon-16.png
+    ixx-icon-24.png
+    ixx-icon-32.png
+    ixx-icon-48.png
+    ixx-icon-64.png
+    ixx-icon-128.png
+    ixx-icon-256.png
+    ixx-icon.ico             multi-size Windows icon
+```
+
+To generate the icons (requires Pillow):
+
+```
+pip install Pillow
+python assets/generate_icons.py
+```
+
+To associate `.ixx` files with the IXX icon on Windows, see
+[`editor/windows/file-association.md`](editor/windows/file-association.md).
+
+> **SVG note:** SVG output is intentionally skipped — converting a raster PNG
+> to SVG would embed the bitmap data rather than produce a true vector image.
+> PNG and ICO are the canonical IXX icon formats.
 
 ---
 
@@ -244,7 +373,7 @@ The prototype ships with a full automated test suite.
 python -m unittest discover -s tests -p "test*.py"
 ```
 
-**98 tests passing** across: basics, strings, numbers, booleans, conditions, dash blocks, loops, lists, comparisons, `contains`, logic, error handling, and CLI commands.
+**282 tests passing** across: language basics, strings, numbers, booleans, conditions, dash blocks, loops, lists, comparisons, `contains`, logic, error handling, CLI commands, shell guidance, command handlers, path aliases, format helpers, banner, and new system commands.
 
 ---
 
@@ -256,6 +385,12 @@ examples/       example .ixx scripts
 spec/           language spec, shell design, roadmap
 docs/           getting started guide
 tests/          automated tests
+assets/         icon source and generate_icons.py script
+  generated/    generated PNG sizes and ixx-icon.ico
+editor/         syntax highlighting and file association
+  vscode/       VS Code language extension
+  notepad-plus-plus/  Notepad++ User Defined Language
+  windows/      Windows file association documentation
 CHANGELOG.md    version history
 ```
 
@@ -267,3 +402,6 @@ CHANGELOG.md    version history
 - [`spec/shell.md`](spec/shell.md) — planned interactive shell design
 - [`spec/roadmap.md`](spec/roadmap.md) — where IXX is going
 - [`docs/getting-started.md`](docs/getting-started.md) — step by step setup
+- [`editor/vscode/README.md`](editor/vscode/README.md) — VS Code extension
+- [`editor/notepad-plus-plus/README.md`](editor/notepad-plus-plus/README.md) — Notepad++ UDL
+- [`editor/windows/file-association.md`](editor/windows/file-association.md) — Windows file icon and association

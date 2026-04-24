@@ -1,18 +1,39 @@
 [build-system]
-requires = ["setuptools>=42"]
+requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ixx"
-version = "0.1.0"
-description = "The IXX programming language"
+version = "0.3.6"
+description = "IXX — executable checklist-style code"
+readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.11"
 dependencies = [
     "lark>=1.1",
 ]
+keywords = ["ixx", "scripting", "language", "checklist", "automation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Interpreters",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://github.com/Ixxy717/.ixx"
+"Bug Tracker" = "https://github.com/Ixxy717/.ixx/issues"
+Changelog = "https://github.com/Ixxy717/.ixx/blob/main/CHANGELOG.md"
 
 [project.scripts]
 ixx = "ixx.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
+
+[tool.setuptools.package-data]
+ixx = ["**/*.lark", "**/*.json", "assets/*.ico", "assets/*.ixx"]

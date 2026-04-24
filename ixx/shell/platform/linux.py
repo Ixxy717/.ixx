@@ -34,9 +34,45 @@ def get_cpu_core_count() -> dict:
     _not_yet("cpu core-count")
 
 
+def get_cpu_speed() -> dict:
+    _not_yet("cpu speed")
+
+
+def get_cpu_temperature() -> list[dict]:
+    _not_yet("cpu temperature")
+
+
 def get_ram_info() -> dict:
     _not_yet("ram")
 
 
+def get_ram_speed() -> dict:
+    _not_yet("ram speed")
+
+
+def get_gpu_info() -> list[dict]:
+    _not_yet("gpu")
+
+
 def get_disk_info() -> list[dict]:
     _not_yet("disk")
+
+
+def get_wifi_info() -> dict:
+    _not_yet("wifi")
+
+
+def get_public_ip() -> str | None:
+    _not_yet("ip public")
+
+
+def get_ports() -> list[dict]:
+    _not_yet("ports")
+
+
+def get_processes() -> list[dict]:
+    _not_yet("processes")
+
+
+def get_disk_partitions() -> list[dict]:
+    _not_yet("disk partitions")
