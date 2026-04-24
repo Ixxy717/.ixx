@@ -109,7 +109,20 @@ def handle_cpu_temperature(args: list[str]) -> None:
         return
 
     if not zones:
-        print("\n  Temperature data not available on this hardware.\n")
+        print(
+            "\n  Temperature data not available.\n"
+            "\n"
+            "  On AMD Ryzen and many desktop systems, Windows does not expose\n"
+            "  CPU temperatures natively. To enable 'cpu temp':\n"
+            "\n"
+            "  1. Download and run LibreHardwareMonitor (free, no install needed):\n"
+            "       https://github.com/LibreHardwareMonitor/LibreHardwareMonitor\n"
+            "\n"
+            "  2. Or run OpenHardwareMonitor, then retry 'cpu temp'.\n"
+            "\n"
+            "  Either tool runs in the background and exposes sensor data\n"
+            "  through WMI that IXX can read.\n"
+        )
         return
 
     print()
@@ -118,7 +131,10 @@ def handle_cpu_temperature(args: list[str]) -> None:
         # Shorten verbose ACPI instance names for display
         if "\\" in label:
             label = label.rsplit("\\", 1)[-1]
-        print(f"  {label:<30}  {z['celsius']} °C")
+        print(f"  {label:<30}  {z['celsius']} \u00b0C")
+    source = zones[0].get("source", "")
+    if source in ("OHM", "LHM"):
+        print(f"\n  (via {source} — LibreHardwareMonitor/OpenHardwareMonitor)")
     print()
 
 

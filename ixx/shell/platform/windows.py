@@ -346,12 +346,20 @@ def get_cpu_speed() -> dict:
 
 
 def get_cpu_temperature() -> list[dict]:
-    """Return thermal zone temperatures via ACPI WMI (Windows 10+).
+    """Return CPU temperature data.
+
+    Tries three sources in order:
+      1. ACPI thermal zones via MSAcpi_ThermalZoneTemperature (works on most
+         laptops and some desktops where the BIOS exposes ACPI zones).
+      2. OpenHardwareMonitor WMI (root/OpenHardwareMonitor) — populated when
+         OpenHardwareMonitor or LibreHardwareMonitor (OHM-compatible) is running.
+      3. LibreHardwareMonitor WMI (root/LibreHardwareMonitor).
 
     Returns:
-        [{"zone": str, "celsius": float}, ...]
-        Returns [] if no thermal zone data is available — not an error.
+        [{"zone": str, "celsius": float, "source": str}, ...]
+        Returns [] if no source has data — not an error.
     """
+    # --- Source 1: ACPI thermal zones ---
     raw = _ps(
         "try { "
         "  $zones = Get-WmiObject -Namespace root/wmi "
@@ -374,10 +382,35 @@ def get_cpu_temperature() -> list[dict]:
         zone = str(item.get("Zone") or "").strip()
         if tenths_k is not None:
             celsius = round((int(tenths_k) / 10) - 273.15, 1)
-            # Sanity-check: ignore obviously wrong values
             if -20 <= celsius <= 150:
-                results.append({"zone": zone, "celsius": celsius})
-    return results
+                results.append({"zone": zone, "celsius": celsius, "source": "acpi"})
+    if results:
+        return results
+
+    # --- Source 2 & 3: OpenHardwareMonitor / LibreHardwareMonitor WMI ---
+    for ns, label in (("root/OpenHardwareMonitor", "OHM"),
+                      ("root/LibreHardwareMonitor", "LHM")):
+        raw = _ps(
+            f"try {{ "
+            f"  $s = Get-WmiObject -Namespace {ns} -Class Sensor "
+            f"       -ErrorAction SilentlyContinue "
+            f"       | Where-Object {{ $_.SensorType -eq 'Temperature' }}; "
+            f"  if ($s) {{ $s | Select-Object Name, Value, Parent "
+            f"       | ConvertTo-Json -Compress }} "
+            f"}} catch {{ }}"
+        )
+        items = _parse_json(raw)
+        for item in items:
+            val = item.get("Value")
+            name = str(item.get("Name") or "").strip()
+            if val is not None:
+                celsius = round(float(val), 1)
+                if -20 <= celsius <= 150:
+                    results.append({"zone": name, "celsius": celsius, "source": label})
+        if results:
+            return results
+
+    return []
 
 
 # ---------------------------------------------------------------------------
