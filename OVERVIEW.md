@@ -1072,9 +1072,9 @@ The goal is `ixx` works out of the box on any machine, with no Python, no Lark, 
 
 ## 10. What IXX is not
 
-- **Not a Python replacement.** IXX does not try to be a general-purpose language. If you need complex data structures, libraries, or algorithms, Python, Go, or Rust is the right tool.
+- **Not trying to replace every advanced use case.** For now, if you need complex libraries, algorithms, or production-scale software, Python, Go, or Rust are still the right tools. IXX's first goal is simple scripts and everyday system control.
 
-- **Not a PowerShell replacement for power users.** IXX covers the common 20% of things. Advanced Windows administration is out of scope.
+- **Not trying to copy every PowerShell feature.** IXX aims to replace the annoying everyday layer first. Deep platform-specific administration can still use native tools when needed, but IXX should eventually cover the common useful workflows cleanly.
 
 - **Not a Bash replacement for DevOps.** IXX does not aim to replace pipeline-heavy shell scripting or CI automation.
 
