@@ -326,7 +326,7 @@ Alias-aware help: `help ram` now shows "Also accepts: memory" and subcommands sh
 
 ---
 
-## Future: disk commands — diskpart-style read-only interface
+## Future: disk commands — diskpart-style read-only interface (v0.5)
 
 The goal is a read-only disk inspection workflow that feels like `diskpart` without requiring `diskpart` or admin rights.
 
