@@ -444,6 +444,69 @@ def get_ram_speed() -> dict:
 # GPU
 # ---------------------------------------------------------------------------
 
+def get_gpu_temperature() -> list[dict]:
+    """Return GPU temperatures from nvidia-smi or LHM/OHM WMI.
+
+    Returns:
+        [{"name": str, "celsius": float, "source": str}, ...]
+
+    Sources tried in order:
+      1. nvidia-smi (NVIDIA only, bundled with all NVIDIA drivers)
+      2. LibreHardwareMonitor WMI (root/LibreHardwareMonitor)
+      3. OpenHardwareMonitor WMI (root/OpenHardwareMonitor)
+    """
+    results: list[dict] = []
+
+    # --- Source 1: nvidia-smi ---
+    raw = run_command(
+        ["nvidia-smi",
+         "--query-gpu=name,temperature.gpu",
+         "--format=csv,noheader,nounits"],
+        timeout=10,
+    )
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line or "," not in line:
+            continue
+        parts = line.split(",", 1)
+        if len(parts) == 2:
+            name = parts[0].strip()
+            try:
+                celsius = round(float(parts[1].strip()), 1)
+                results.append({"name": name, "celsius": celsius, "source": "nvidia-smi"})
+            except ValueError:
+                pass
+
+    if results:
+        return results
+
+    # --- Source 2 & 3: LHM / OHM WMI ---
+    for ns, label in (("root/LibreHardwareMonitor", "LHM"),
+                      ("root/OpenHardwareMonitor", "OHM")):
+        raw = _ps(
+            f"try {{ "
+            f"  $s = Get-WmiObject -Namespace {ns} -Class Sensor "
+            f"       -ErrorAction SilentlyContinue "
+            f"       | Where-Object {{ $_.SensorType -eq 'Temperature' "
+            f"           -and $_.Name -match 'GPU|Core' }}; "
+            f"  if ($s) {{ $s | Select-Object Name, Value "
+            f"       | ConvertTo-Json -Compress }} "
+            f"}} catch {{ }}"
+        )
+        items = _parse_json(raw)
+        for item in items:
+            val = item.get("Value")
+            name = str(item.get("Name") or "").strip()
+            if val is not None:
+                celsius = round(float(val), 1)
+                if -20 <= celsius <= 150:
+                    results.append({"name": name, "celsius": celsius, "source": label})
+        if results:
+            return results
+
+    return []
+
+
 def _get_nvidia_vram_mb() -> dict[str, int]:
     """Return {gpu_name_lower: vram_mib} for all NVIDIA GPUs via nvidia-smi.
 
@@ -649,6 +712,94 @@ def get_processes() -> list[dict]:
         cpu_str = f"{float(cpu):.1f}s" if cpu is not None else "-"
         ram = int(item.get("WorkingSet") or 0)
         results.append({"name": name, "pid": pid, "cpu": cpu_str, "ram_bytes": ram})
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Disk health and SMART
+# ---------------------------------------------------------------------------
+
+def get_disk_health() -> list[dict]:
+    """Return health status for all physical disks via Get-PhysicalDisk.
+
+    Returns:
+        [{"name": str, "health": str, "status": str, "media_type": str,
+          "size_bytes": int}, ...]
+
+    No admin rights required.
+    """
+    raw = _ps(
+        "Get-PhysicalDisk "
+        "| Select-Object FriendlyName, HealthStatus, OperationalStatus, "
+        "  MediaType, Size "
+        "| ConvertTo-Json -Compress"
+    )
+    items = _parse_json(raw)
+    results = []
+    for item in items:
+        name   = (item.get("FriendlyName") or "Unknown disk").strip()
+        health = (item.get("HealthStatus") or "Unknown").strip()
+        status = (item.get("OperationalStatus") or "Unknown").strip()
+        media  = (item.get("MediaType") or "Unspecified").strip()
+        size   = int(item.get("Size") or 0)
+        results.append({
+            "name":       name,
+            "health":     health,
+            "status":     status,
+            "media_type": media,
+            "size_bytes": size,
+        })
+    return results
+
+
+def get_disk_smart() -> list[dict]:
+    """Return basic SMART predictive-failure flag for all physical disks.
+
+    Returns:
+        [{"name": str, "failure_predicted": bool, "media_type": str,
+          "spindle_speed": str, "size_bytes": int}, ...]
+
+    The failure_predicted flag comes from Get-PhysicalDisk HealthStatus
+    ("Unhealthy" means failure predicted / degraded).
+    Full SMART attribute tables require admin and are deferred to a future release.
+    No admin rights required for this basic check.
+    """
+    raw = _ps(
+        "Get-PhysicalDisk "
+        "| Select-Object FriendlyName, HealthStatus, MediaType, "
+        "  SpindleSpeed, Size "
+        "| ConvertTo-Json -Compress"
+    )
+    items = _parse_json(raw)
+    results = []
+    for item in items:
+        name    = (item.get("FriendlyName") or "Unknown disk").strip()
+        health  = (item.get("HealthStatus") or "").strip().lower()
+        media   = (item.get("MediaType") or "Unspecified").strip()
+        spindle = item.get("SpindleSpeed")
+        size    = int(item.get("Size") or 0)
+
+        failure = health in ("unhealthy", "warning", "failed")
+
+        spindle_str: str
+        try:
+            spindle_val = int(spindle) if spindle is not None else 0
+        except (TypeError, ValueError):
+            spindle_val = 0
+
+        if spindle_val > 0:
+            spindle_str = f"{spindle_val} RPM"
+        else:
+            spindle_str = "N/A" if media in ("SSD", "NVMe", "Unspecified") else "Unknown"
+
+        results.append({
+            "name":               name,
+            "failure_predicted":  failure,
+            "health_status":      (item.get("HealthStatus") or "Unknown").strip(),
+            "media_type":         media,
+            "spindle_speed":      spindle_str,
+            "size_bytes":         size,
+        })
     return results
 
 

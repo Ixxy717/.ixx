@@ -350,9 +350,10 @@ class TestFullRegistry(unittest.TestCase):
         for sub in delete.subcommands.values():
             self.assertTrue(sub.destructive, f"{sub.name} should be destructive")
 
-    def test_disk_health_requires_admin(self) -> None:
+    def test_disk_health_is_live(self) -> None:
         disk = self.registry.get("disk")
-        self.assertTrue(disk.subcommands["health"].requires_admin)
+        # disk health is now a live command (no longer requires admin)
+        self.assertFalse(disk.subcommands["health"].requires_admin)
 
     def test_stub_handlers_callable(self) -> None:
         """All registered handlers are callable and do not raise uncaught exceptions.
@@ -395,13 +396,13 @@ class TestFullRegistry(unittest.TestCase):
                             self.fail(f"handler for '{node.name}' raised: {exc}")
 
     def test_stub_handler_prints_not_implemented(self) -> None:
-        # disk health is still a stub in v0.3.0 (requires admin SMART access)
+        # disk smart full is still a stub (requires admin)
         disk = self.registry.get("disk")
-        disk_health = disk.subcommands["health"]
+        disk_smart_full = disk.subcommands["smart"].subcommands["full"]
         captured = io.StringIO()
         with patch("sys.stdout", captured):
-            disk_health.handler([])
-        self.assertIn("not yet implemented", captured.getvalue())
+            disk_smart_full.handler([])
+        self.assertIn("requires administrator", captured.getvalue())
 
     def test_guidance_on_full_registry_cpu(self) -> None:
         # v0.3.0: cpu has executable_with_children=True — it executes AND shows subcommands

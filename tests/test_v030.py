@@ -660,11 +660,15 @@ class TestReplDo(unittest.TestCase):
         self.assertEqual(code, 0)  # exits clean but prints unknown message
         self.assertIn("Unknown", out)
 
-    def test_ixx_do_disk_health_stub(self) -> None:
-        """disk health is still a stub (requires admin SMART access)."""
+    def test_ixx_do_disk_health_live(self) -> None:
+        """disk health is now a live command — output should contain disk info."""
         code, out = cli("do", "disk health")
         self.assertEqual(code, 0)
-        self.assertIn("not yet implemented", out)
+        # Should show at least one disk with a health status
+        self.assertTrue(
+            "Health:" in out or "not yet available" in out,
+            f"Expected disk health output, got: {out!r}"
+        )
 
 
 # =============================================================================

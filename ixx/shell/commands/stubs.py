@@ -21,7 +21,7 @@ from .hardware import (
     handle_cpu, handle_cpu_cores, handle_cpu_info, handle_cpu_speed,
     handle_cpu_temperature,
     handle_ram, handle_ram_free, handle_ram_usage, handle_ram_speed,
-    handle_gpu, handle_gpu_vram, handle_gpu_driver,
+    handle_gpu, handle_gpu_vram, handle_gpu_driver, handle_gpu_temp,
 )
 from .network import (
     handle_ip,
@@ -36,6 +36,7 @@ from .network import (
 )
 from .system import (
     handle_disk, handle_disk_space, handle_disk_partitions,
+    handle_disk_health, handle_disk_smart, handle_disk_smart_full,
     handle_ports, handle_processes,
 )
 from .files import handle_folder_size, handle_open, handle_list, handle_find_file
@@ -146,8 +147,8 @@ def _build_ram() -> CommandNode:
 def _build_gpu() -> CommandNode:
     return CommandNode(
         "gpu",
-        description="GPU name, VRAM, and driver",
-        examples=["gpu", "gpu vram", "gpu driver"],
+        description="GPU name, VRAM, driver, and temperature",
+        examples=["gpu", "gpu vram", "gpu driver", "gpu temp"],
         handler=handle_gpu,
         executable_with_children=True,
         subcommands={
@@ -163,6 +164,13 @@ def _build_gpu() -> CommandNode:
                 examples=["gpu driver"],
                 handler=handle_gpu_driver,
             ),
+            "temp": CommandNode(
+                "temp",
+                description="GPU temperature",
+                aliases=["temperature"],
+                examples=["gpu temp"],
+                handler=handle_gpu_temp,
+            ),
         },
     )
 
@@ -170,9 +178,9 @@ def _build_gpu() -> CommandNode:
 def _build_disk() -> CommandNode:
     return CommandNode(
         "disk",
-        description="List disks, space, and health",
+        description="List disks, space, health, and SMART status",
         aliases=["storage", "drive", "drives"],
-        examples=["disk", "disk space"],
+        examples=["disk", "disk space", "disk health", "disk smart"],
         handler=handle_disk,
         executable_with_children=True,
         subcommands={
@@ -191,9 +199,25 @@ def _build_disk() -> CommandNode:
             ),
             "health": CommandNode(
                 "health",
-                description="SMART health status",
-                handler=_stub("disk health"),
-                requires_admin=True,
+                description="Physical disk health status",
+                examples=["disk health"],
+                handler=handle_disk_health,
+            ),
+            "smart": CommandNode(
+                "smart",
+                description="SMART predictive-failure flag",
+                examples=["disk smart", "disk smart full"],
+                handler=handle_disk_smart,
+                executable_with_children=True,
+                subcommands={
+                    "full": CommandNode(
+                        "full",
+                        description="Full SMART attribute table (requires admin)",
+                        examples=["disk smart full"],
+                        handler=handle_disk_smart_full,
+                        requires_admin=True,
+                    ),
+                },
             ),
         },
     )

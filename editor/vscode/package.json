@@ -3,7 +3,7 @@
   "name": "ixx-language",
   "displayName": "IXX Language",
   "description": "Syntax highlighting for IXX (.ixx) source files. Registers .ixx as IXX, not C++.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "ixx",
   "license": "MIT",
   "engines": {

@@ -109,6 +109,96 @@ def handle_disk_partitions(args: list[str]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# disk health
+# ---------------------------------------------------------------------------
+
+def handle_disk_health(args: list[str]) -> None:
+    """Show health status for all physical disks."""
+    try:
+        disks = _platform.current().get_disk_health()
+    except NotImplementedError:
+        _platform_error("disk health")
+        return
+    except Exception as e:
+        print(f"\n  disk health: could not retrieve info ({e})\n")
+        return
+
+    if not disks:
+        print("\n  No physical disk health data available.\n")
+        return
+
+    print()
+    for d in disks:
+        health = d["health"]
+        marker = "  [!]" if health.lower() in ("unhealthy", "warning", "failed") else "     "
+        size_str = format_bytes(d["size_bytes"]) if d["size_bytes"] else "-"
+        print(f"{marker} {d['name']}")
+        print(f"       Health:  {health}")
+        print(f"       Status:  {d['status']}")
+        print(f"       Type:    {d['media_type']}")
+        print(f"       Size:    {size_str}")
+        print()
+    print()
+
+
+# ---------------------------------------------------------------------------
+# disk smart
+# ---------------------------------------------------------------------------
+
+def handle_disk_smart(args: list[str]) -> None:
+    """Show basic SMART predictive-failure flag for all physical disks."""
+    try:
+        disks = _platform.current().get_disk_smart()
+    except NotImplementedError:
+        _platform_error("disk smart")
+        return
+    except Exception as e:
+        print(f"\n  disk smart: could not retrieve info ({e})\n")
+        return
+
+    if not disks:
+        print("\n  No physical disk SMART data available.\n")
+        return
+
+    print()
+    any_warning = False
+    for d in disks:
+        failure = d["failure_predicted"]
+        flag = "FAILURE PREDICTED" if failure else "OK"
+        marker = "  [!]" if failure else "     "
+        size_str = format_bytes(d["size_bytes"]) if d["size_bytes"] else "-"
+        if failure:
+            any_warning = True
+        print(f"{marker} {d['name']}")
+        print(f"       SMART:    {flag}")
+        print(f"       Health:   {d['health_status']}")
+        print(f"       Type:     {d['media_type']}")
+        if d["spindle_speed"] not in ("N/A", "Unknown"):
+            print(f"       Spindle:  {d['spindle_speed']}")
+        print(f"       Size:     {size_str}")
+        print()
+
+    if any_warning:
+        print("  [!] One or more disks report a health warning. Back up your data.\n")
+
+    print("  For full SMART attribute tables, run:  disk smart full\n")
+
+
+def handle_disk_smart_full(args: list[str]) -> None:
+    """Full SMART attribute table — requires administrator rights."""
+    print(
+        "\n  disk smart full requires administrator privileges.\n"
+        "\n"
+        "  To enable it:\n"
+        "    1. Right-click your terminal and choose 'Run as administrator'.\n"
+        "    2. Or run:  ixx setup\n"
+        "\n"
+        "  Full SMART attributes (raw read error rate, reallocated sectors,\n"
+        "  pending sectors, etc.) will be available in a future release.\n"
+    )
+
+
+# ---------------------------------------------------------------------------
 # ports
 # ---------------------------------------------------------------------------
 

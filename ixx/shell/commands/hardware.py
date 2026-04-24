@@ -273,6 +273,39 @@ def handle_gpu_vram(args: list[str]) -> None:
     print()
 
 
+def handle_gpu_temp(args: list[str]) -> None:
+    """Show GPU temperature."""
+    try:
+        zones = _platform.current().get_gpu_temperature()
+    except NotImplementedError:
+        _platform_error("gpu temperature")
+        return
+    except Exception as e:
+        print(f"\n  gpu temperature: could not retrieve info ({e})\n")
+        return
+
+    if not zones:
+        print(
+            "\n  GPU temperature data not available.\n"
+            "\n"
+            "  For NVIDIA GPUs, ensure the NVIDIA driver is installed (nvidia-smi required).\n"
+            "  For AMD or Intel GPUs, run LibreHardwareMonitor in the background:\n"
+            "       https://github.com/LibreHardwareMonitor/LibreHardwareMonitor\n"
+        )
+        return
+
+    print()
+    source = zones[0].get("source", "")
+    for z in zones:
+        label = z.get("name") or "GPU"
+        print(f"  {label:<30}  {z['celsius']} \u00b0C")
+    if source in ("OHM", "LHM"):
+        print(f"\n  (via {source} — LibreHardwareMonitor/OpenHardwareMonitor)")
+    elif source == "nvidia-smi":
+        print(f"\n  (via nvidia-smi)")
+    print()
+
+
 def handle_gpu_driver(args: list[str]) -> None:
     """Show GPU driver version only."""
     try:

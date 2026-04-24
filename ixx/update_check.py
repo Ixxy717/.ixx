@@ -101,7 +101,13 @@ def _check_worker(current_version: str) -> None:
 
 
 def start(current_version: str) -> None:
-    """Spawn the background check. Call early; collect with notify() later."""
+    """Spawn the background check. Call early; collect with notify() later.
+
+    Skipped entirely if the environment variable IXX_NO_UPDATE_CHECK is set
+    to any non-empty value.
+    """
+    if os.environ.get("IXX_NO_UPDATE_CHECK", "").strip():
+        return
     global _thread
     _thread = threading.Thread(
         target=_check_worker,

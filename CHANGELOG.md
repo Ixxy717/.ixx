@@ -4,6 +4,23 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.4.3] — gpu temp, disk health, disk smart, update check
+
+### Added
+
+- **`gpu temp`** — GPU temperature command. Queries `nvidia-smi` for NVIDIA cards; falls back to LibreHardwareMonitor/OpenHardwareMonitor WMI for other vendors. Alias: `gpu temperature`.
+- **`disk health`** — Physical disk health status via `Get-PhysicalDisk` (no admin required). Shows health, operational status, media type, and size per drive.
+- **`disk smart`** — Basic SMART predictive-failure flag per physical disk (no admin required). Shows SMART status, health, media type, and spindle speed for HDDs.
+- **`disk smart full`** — Stub with a clear "requires administrator" message; full attribute table deferred to a future release.
+- **Background update check** — On interactive shell startup, a daemon thread checks PyPI once per 24 hours and prints a single update notice below the banner if a newer version is available. Set `IXX_NO_UPDATE_CHECK=1` to opt out entirely.
+
+### Fixed
+
+- `disk health` promoted from admin-only stub to a live no-admin command.
+- `get_disk_smart` spindle speed parsing no longer crashes when `SpindleSpeed` returns the string `"Unknown"` instead of an integer.
+
+---
+
 ## [0.4.0.2] — GPU VRAM fix
 
 ### Fixed

@@ -42,6 +42,10 @@ def get_cpu_temperature() -> list[dict]:
     _not_yet("cpu temperature")
 
 
+def get_gpu_temperature() -> list[dict]:
+    _not_yet("gpu temperature")
+
+
 def get_ram_info() -> dict:
     _not_yet("ram")
 
@@ -56,6 +60,14 @@ def get_gpu_info() -> list[dict]:
 
 def get_disk_info() -> list[dict]:
     _not_yet("disk")
+
+
+def get_disk_health() -> list[dict]:
+    _not_yet("disk health")
+
+
+def get_disk_smart() -> list[dict]:
+    _not_yet("disk smart")
 
 
 def get_wifi_info() -> dict:
