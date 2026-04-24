@@ -11,7 +11,7 @@ from __future__ import annotations
 from .guidance import GuidanceResult
 from .registry import CommandNode, CommandRegistry
 
-# ANSI colours — only used when stdout is a real terminal
+import os
 import sys
 
 _BOLD   = "\033[1m"
@@ -22,9 +22,36 @@ _RED    = "\033[31m"
 _RESET  = "\033[0m"
 
 
+def _enable_ansi() -> bool:
+    """Return True if ANSI escape codes will render correctly.
+
+    On Windows, Virtual Terminal Processing must be explicitly enabled via
+    SetConsoleMode.  On any other OS, isatty() is sufficient.
+    """
+    if not sys.stdout.isatty():
+        return False
+    if os.name == "nt":
+        try:
+            import ctypes
+            import ctypes.wintypes
+            kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+            handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+            mode = ctypes.wintypes.DWORD()
+            kernel32.GetConsoleMode(handle, ctypes.byref(mode))
+            # ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+            kernel32.SetConsoleMode(handle, mode.value | 0x0004)
+            return True
+        except Exception:
+            return False
+    return True
+
+
+_ANSI = _enable_ansi()
+
+
 def _c(code: str, text: str) -> str:
-    """Apply ANSI code only when writing to a real terminal."""
-    if sys.stdout.isatty():
+    """Apply ANSI code only when the terminal supports it."""
+    if _ANSI:
         return f"{code}{text}{_RESET}"
     return text
 
