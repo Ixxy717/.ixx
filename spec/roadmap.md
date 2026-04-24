@@ -272,6 +272,35 @@ Run raw shell commands from IXX. Syntax TBD.
 
 ---
 
+## v0.5 — Bundled hardware sensor driver (pending)
+
+On AMD Ryzen and many desktop systems, Windows does not expose CPU temperatures
+through any built-in WMI or ACPI interface. Currently IXX can only read sensor
+data if OpenHardwareMonitor or LibreHardwareMonitor is already running in the
+background.
+
+The goal is to make `cpu temp` (and future `gpu temp`, `disk temp`, fan speeds,
+voltages) work out of the box with zero setup.
+
+**Plan:**
+- Bundle LibreHardwareMonitor as a lightweight background component inside IXX
+- On first use of any hardware sensor command, launch it silently in the
+  background (or as a one-shot query)
+- Read sensor data via its WMI provider (`root/LibreHardwareMonitor`)
+- Shut it down cleanly after the query if it was started by IXX
+- Requires running with administrator privileges (one-time prompt or `ixx setup`)
+
+**Sensors to unlock:**
+- `cpu temp` — CPU package and core temperatures
+- `gpu temp` — GPU temperature (once `gpu temp` command is added)
+- `disk temp` — drive temperatures (via S.M.A.R.T. + sensor)
+- Fan speeds, voltages — future commands
+
+**Status:** pending — blocked on deciding whether to require admin on first sensor
+use or gate the whole feature behind `ixx setup`.
+
+---
+
 ## Command normalization — v0.3.x (completed)
 
 IXX now accepts natural language variants and phrase synonyms for commands without requiring exact canonical spelling.
