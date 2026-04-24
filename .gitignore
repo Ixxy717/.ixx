@@ -34,3 +34,6 @@ ixx-demo.txt
 ixx-hello.txt
 ixx-lines.txt
 ixx-log.txt
+
+# StressTest runtime output
+StressTest/tmp/*.txt
