@@ -1,0 +1,102 @@
+// IXX grammar
+
+// ─── entry point ─────────────────────────────────────────────────────────────
+start: (_NEWLINE | statement)*
+
+// ─── statements ──────────────────────────────────────────────────────────────
+statement: assignment _NEWLINE
+         | if_stmt
+         | loop_stmt
+         | say_stmt _NEWLINE
+
+// RHS is one or more comma-separated exprs.
+// Multiple → ListLit.  Single → plain value.  Transformer handles the distinction.
+assignment: IDENTIFIER "=" expr ("," expr)*
+
+if_stmt: "if" expr _NEWLINE block ("else" _NEWLINE block)?
+
+loop_stmt: "loop" expr _NEWLINE block
+
+say_stmt: "say" (expr ("," expr)*)?
+
+block: _INDENT statement+ _DEDENT
+
+// ─── expressions ─────────────────────────────────────────────────────────────
+?expr: or_expr
+
+?or_expr:  and_expr
+         | or_expr  "or"  and_expr  -> or_op
+
+?and_expr: not_expr
+         | and_expr "and" not_expr  -> and_op
+
+// NOT_KW is a named terminal so it works both here and inside `is not`
+?not_expr: _NOT_KW not_expr         -> not_op
+         | compare
+
+// Left-recursive compare rules let LALR(1) look one token ahead to distinguish
+// `is` (equality) from `is not` (inequality) with no conflicts.
+// `?` inlines the single-operand (no-op) case so the transformer only sees
+// named op_* nodes or a plain add_expr.
+?compare: add_expr
+        | compare _IS _NOT_KW add_expr     -> op_is_not
+        | compare _IS add_expr             -> op_is
+        | compare _LESS _THAN_KW add_expr  -> op_less_than
+        | compare _MORE _THAN_KW add_expr  -> op_more_than
+        | compare _AT _LEAST_KW add_expr   -> op_at_least
+        | compare _AT _MOST_KW add_expr    -> op_at_most
+        | compare _CONTAINS add_expr       -> op_contains
+
+?add_expr: mul_expr ((PLUS | MINUS) mul_expr)*
+
+?mul_expr: primary ((STAR | SLASH) primary)*
+
+?primary: "(" expr ")"
+        | MINUS primary               -> neg_op
+        | INT                         -> int_lit
+        | FLOAT                       -> float_lit
+        | ESCAPED_STRING              -> str_lit
+        | YES                         -> yes_lit
+        | NO                          -> no_lit
+        | IDENTIFIER                  -> var_ref
+
+// ─── terminals ───────────────────────────────────────────────────────────────
+
+// YES / NO are case-insensitive boolean literals
+YES.1:      /[Yy][Ee][Ss]/
+NO.1:       /[Nn][Oo]/
+
+// Comparison keyword terminals.
+// Underscore prefix = Lark drops them from the parse tree, so transformer
+// methods only receive the expression children, not the keyword tokens.
+// Priority .1 ensures they beat IDENTIFIER.
+_IS.1:       "is"
+_NOT_KW.1:   "not"
+_LESS.1:     "less"
+_MORE.1:     "more"
+_THAN_KW.1:  "than"
+_AT.1:       "at"
+_LEAST_KW.1: "least"
+_MOST_KW.1:  "most"
+_CONTAINS.1: "contains"
+
+PLUS:  "+"
+MINUS: "-"
+STAR:  "*"
+SLASH: "/"
+
+IDENTIFIER: /[A-Za-z_][A-Za-z0-9_]*/
+
+COMMENT: /#[^\n]*/
+
+%import common.INT
+%import common.FLOAT
+%import common.ESCAPED_STRING
+%import common.WS_INLINE
+%declare _INDENT _DEDENT
+%ignore WS_INLINE
+%ignore COMMENT
+%ignore /\r/
+
+// Captures newline + leading whitespace so the Indenter can measure depth
+_NEWLINE: /\n[\t ]*/
