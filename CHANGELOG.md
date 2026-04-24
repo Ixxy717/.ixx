@@ -4,6 +4,23 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.4.0.2] — GPU VRAM fix
+
+### Fixed
+
+- **GPU VRAM capped at 4 GB** — `Win32_VideoController.AdapterRAM` is a 32-bit field and cannot represent more than 4 GB regardless of actual hardware. `get_gpu_info()` now calls `nvidia-smi --query-gpu=name,memory.total` (bundled with all NVIDIA drivers) and cross-references the result by GPU name. The correct value (e.g. 12 GB for RTX 4070 SUPER) replaces the capped WMI value when available. Non-NVIDIA adapters continue using `AdapterRAM` unchanged.
+
+---
+
+## [0.4.0.1] — CPU temperature fallback
+
+### Fixed
+
+- **`cpu temp` showed "Temperature data not available" on AMD Ryzen and many desktop systems** — Windows does not expose CPU temperatures through ACPI thermal zones on these platforms without a kernel driver. `get_cpu_temperature()` now queries three sources in order: ACPI (`MSAcpi_ThermalZoneTemperature`), OpenHardwareMonitor WMI (`root/OpenHardwareMonitor`), LibreHardwareMonitor WMI (`root/LibreHardwareMonitor`). The first source that returns data wins.
+- When no source returns data, the fallback message now explains the AMD Ryzen limitation and links to LibreHardwareMonitor as a free no-install workaround.
+
+---
+
 ## [0.4.0] — Release v0.4.0
 
 ### Added
