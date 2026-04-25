@@ -12,7 +12,7 @@ from .ast_nodes import (
     Program, Assign, If, Loop, Say,
     IntLit, FloatLit, StrLit, BoolLit, NothingLit, ListLit, VarRef,
     NegOp, BinOp, Compare, AndOp, OrOp, NotOp,
-    CallExpr, CallStmt, ReturnStmt, FuncDef, TryCatch,
+    CallExpr, CallStmt, ReturnStmt, FuncDef, TryCatch, UseStmt,
 )
 
 
@@ -78,6 +78,20 @@ class IXXTransformer(Transformer):
         try_body   = items[0]
         catch_body = items[1] if len(items) > 1 else []
         return TryCatch(try_body=try_body, catch_body=catch_body)
+
+    # ── use / import statements ─────────────────────────────────────────────────
+
+    def use_file(self, items):
+        raw = str(items[0])
+        path = raw[1:-1]            # strip surrounding quotes
+        line = getattr(items[0], "line", None)
+        return UseStmt(kind="file", path=path, line=line)
+
+    def use_std(self, items):
+        raw = str(items[0])
+        path = raw[1:-1]
+        line = getattr(items[0], "line", None)
+        return UseStmt(kind="std", path=path, line=line)
 
     def block(self, items):
         return [s for s in items if s is not None]

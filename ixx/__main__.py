@@ -219,6 +219,7 @@ def _run_file(path: str, check_only: bool = False) -> None:
     from lark.exceptions import UnexpectedInput
     from .parser import parse
     from .interpreter import Interpreter, IXXRuntimeError
+    from .modules import resolve_imports, IXXImportError
 
     try:
         program = parse(source)
@@ -230,9 +231,22 @@ def _run_file(path: str, check_only: bool = False) -> None:
         print(f"  {e}", file=sys.stderr)
         sys.exit(1)
 
+    base_dir = os.path.dirname(os.path.abspath(path))
+    try:
+        imported_funcs = resolve_imports(program, base_dir)
+    except IXXImportError as e:
+        if check_only:
+            print(f"ixx: check failed in {path}", file=sys.stderr)
+            loc = f" (line {e.line})" if e.line else ""
+            print(f"  {e}{loc}", file=sys.stderr)
+        else:
+            from .shell.renderer import show_error
+            show_error(f"import error in {path}\n  {e}")
+        sys.exit(1)
+
     if check_only:
         from .checker import SemanticChecker
-        errors = SemanticChecker().check(program, path)
+        errors = SemanticChecker().check(program, path, imported_funcs)
         if errors:
             print(f"ixx: check failed in {path}", file=sys.stderr)
             for e in errors:
@@ -243,7 +257,7 @@ def _run_file(path: str, check_only: bool = False) -> None:
         return
 
     try:
-        Interpreter().run(program)
+        Interpreter().run(program, imported_funcs)
     except IXXRuntimeError as e:
         from .shell.renderer import show_error
         show_error(f"runtime error in {path}\n  {e}")
@@ -280,6 +294,7 @@ def _check_file_json(path: str) -> None:
 
     from lark.exceptions import UnexpectedInput
     from .parser import parse
+    from .modules import resolve_imports, IXXImportError
 
     try:
         program = parse(source)
@@ -294,8 +309,16 @@ def _check_file_json(path: str) -> None:
                        "severity": "error", "message": str(e)}])
         sys.exit(1)
 
+    base_dir = os.path.dirname(os.path.abspath(path))
+    try:
+        imported_funcs = resolve_imports(program, base_dir)
+    except IXXImportError as e:
+        _emit(False, [{"file": path, "line": e.line, "column": None,
+                       "severity": "error", "message": str(e)}])
+        sys.exit(1)
+
     from .checker import SemanticChecker
-    errors = SemanticChecker().check(program, path)
+    errors = SemanticChecker().check(program, path, imported_funcs)
     if errors:
         _emit(False, [err.as_dict() for err in errors])
         sys.exit(1)

@@ -14,8 +14,10 @@ import io
 import os
 import subprocess
 import sys
+import tempfile
 import textwrap
 import unittest
+import unittest.mock
 from pathlib import Path
 
 # Make sure the ixx package is importable when running from any directory
@@ -1117,6 +1119,200 @@ class TestDoBuiltin(unittest.TestCase):
         from ixx.interpreter import IXXRuntimeError
         with self.assertRaises(IXXRuntimeError):
             self._run("x = do(42)")
+
+
+# ── TestImports ───────────────────────────────────────────────────────────────
+
+class TestImports(unittest.TestCase):
+    """Tests for the v0.6.5 import system."""
+
+    def setUp(self):
+        self._td = tempfile.TemporaryDirectory()
+        self._dir = self._td.name
+
+    def tearDown(self):
+        self._td.cleanup()
+
+    def _write(self, name: str, content: str) -> str:
+        path = os.path.join(self._dir, name)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return path
+
+    def _run_main(self, source: str) -> str:
+        from ixx.parser import parse
+        from ixx.modules import resolve_imports
+        from ixx.interpreter import Interpreter
+        prog = parse(source)
+        imported = resolve_imports(prog, self._dir)
+        buf = io.StringIO()
+        with unittest.mock.patch("builtins.print",
+                                 side_effect=lambda *a, **kw: buf.write(" ".join(str(x) for x in a) + "\n")):
+            Interpreter().run(prog, imported)
+        return buf.getvalue()
+
+    # ── grammar ───────────────────────────────────────────────────────────────
+
+    def test_parse_use_file(self):
+        from ixx.parser import parse
+        from ixx.ast_nodes import UseStmt
+        p = parse('use "helpers.ixx"\nsay "hi"')
+        self.assertIsInstance(p.body[0], UseStmt)
+        self.assertEqual(p.body[0].kind, "file")
+        self.assertEqual(p.body[0].path, "helpers.ixx")
+
+    def test_parse_use_std(self):
+        from ixx.parser import parse
+        from ixx.ast_nodes import UseStmt
+        p = parse('use std "time"\nsay "hi"')
+        self.assertIsInstance(p.body[0], UseStmt)
+        self.assertEqual(p.body[0].kind, "std")
+        self.assertEqual(p.body[0].path, "time")
+
+    def test_parse_without_use_unchanged(self):
+        """Existing programs still parse fine."""
+        from ixx.parser import parse
+        p = parse('x = 1\nsay x')
+        self.assertEqual(len(p.body), 2)
+
+    # ── module resolver ───────────────────────────────────────────────────────
+
+    def test_resolve_imports_returns_funcs(self):
+        from ixx.parser import parse
+        from ixx.modules import resolve_imports
+        self._write("helpers.ixx", "function double x\n- return x * 2\n")
+        prog = parse('use "helpers.ixx"\nsay "x"')
+        result = resolve_imports(prog, self._dir)
+        self.assertIn("double", result)
+
+    def test_resolve_top_level_stmts_not_included(self):
+        """Top-level say/assign in imported file are ignored (not in func table)."""
+        from ixx.parser import parse
+        from ixx.modules import resolve_imports
+        self._write("helpers.ixx", 'say "SHOULD NOT PRINT"\nfunction double x\n- return x * 2\n')
+        prog = parse('use "helpers.ixx"\nsay "x"')
+        result = resolve_imports(prog, self._dir)
+        self.assertIn("double", result)
+        self.assertNotIn("SHOULD NOT PRINT", str(result))
+
+    def test_resolve_missing_file_raises(self):
+        from ixx.parser import parse
+        from ixx.modules import resolve_imports, IXXImportError
+        prog = parse('use "missing.ixx"\nsay "x"')
+        with self.assertRaises(IXXImportError):
+            resolve_imports(prog, self._dir)
+
+    def test_resolve_circular_import_raises(self):
+        from ixx.parser import parse
+        from ixx.modules import resolve_imports, IXXImportError
+        self._write("a.ixx", 'use "b.ixx"\nfunction fa\n- return 1\n')
+        self._write("b.ixx", 'use "a.ixx"\nfunction fb\n- return 2\n')
+        prog = parse('use "a.ixx"\nsay "x"')
+        with self.assertRaises(IXXImportError) as ctx:
+            resolve_imports(prog, self._dir)
+        self.assertIn("Circular", str(ctx.exception))
+
+    def test_resolve_duplicate_function_raises(self):
+        from ixx.parser import parse
+        from ixx.modules import resolve_imports, IXXImportError
+        self._write("a.ixx", 'function double x\n- return x * 2\n')
+        self._write("b.ixx", 'function double x\n- return x * 4\n')
+        prog = parse('use "a.ixx"\nuse "b.ixx"\nsay "x"')
+        with self.assertRaises(IXXImportError) as ctx:
+            resolve_imports(prog, self._dir)
+        self.assertIn("double", str(ctx.exception))
+
+    def test_resolve_transitive_imports(self):
+        from ixx.parser import parse
+        from ixx.modules import resolve_imports
+        self._write("base.ixx", 'function base_func x\n- return x + 1\n')
+        self._write("mid.ixx", 'use "base.ixx"\nfunction mid_func x\n- return x + 2\n')
+        prog = parse('use "mid.ixx"\nsay "x"')
+        result = resolve_imports(prog, self._dir)
+        self.assertIn("base_func", result)
+        self.assertIn("mid_func", result)
+
+    # ── interpreter ───────────────────────────────────────────────────────────
+
+    def test_imported_function_callable(self):
+        self._write("helpers.ixx", "function double x\n- return x * 2\n")
+        output = self._run_main('use "helpers.ixx"\nsay double(21)')
+        self.assertIn("42", output)
+
+    def test_imported_top_level_does_not_run(self):
+        """Top-level say in imported file must not appear in output."""
+        self._write("helpers.ixx", 'say "SHOULD NOT PRINT"\nfunction double x\n- return x * 2\n')
+        output = self._run_main('use "helpers.ixx"\nsay double(3)')
+        self.assertNotIn("SHOULD NOT PRINT", output)
+        self.assertIn("6", output)
+
+    def test_local_function_overrides_raises(self):
+        """Local function with same name as imported function should raise."""
+        from ixx.interpreter import Interpreter, IXXRuntimeError
+        from ixx.parser import parse
+        from ixx.modules import resolve_imports
+        self._write("helpers.ixx", "function double x\n- return x * 2\n")
+        prog = parse('use "helpers.ixx"\nfunction double x\n- return x * 99\nsay double(1)')
+        imported = resolve_imports(prog, self._dir)
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            Interpreter().run(prog, imported)
+        self.assertIn("double", str(ctx.exception))
+
+    def test_stdlib_time(self):
+        from ixx.parser import parse
+        from ixx.modules import resolve_imports
+        prog = parse('use std "time"\nsay time_greeting(9)')
+        imported = resolve_imports(prog, self._dir)
+        self.assertIn("time_greeting", imported)
+
+    def test_stdlib_time_runs(self):
+        output = self._run_main('use std "time"\nsay time_greeting(9)')
+        self.assertIn("Good morning", output)
+
+    def test_stdlib_date_runs(self):
+        output = self._run_main('use std "date"\nsay is_leap_year(2024)')
+        self.assertIn("YES", output)
+
+    def test_stdlib_missing_raises(self):
+        from ixx.parser import parse
+        from ixx.modules import resolve_imports, IXXImportError
+        prog = parse('use std "nosuchmodule"\nsay "x"')
+        with self.assertRaises(IXXImportError):
+            resolve_imports(prog, self._dir)
+
+    # ── checker ───────────────────────────────────────────────────────────────
+
+    def test_checker_knows_imported_functions(self):
+        from ixx.parser import parse
+        from ixx.modules import resolve_imports
+        from ixx.checker import SemanticChecker
+        self._write("helpers.ixx", "function double x\n- return x * 2\n")
+        prog = parse('use "helpers.ixx"\nx = double(5)\nsay x')
+        imported = resolve_imports(prog, self._dir)
+        errors = SemanticChecker().check(prog, "main.ixx", imported)
+        self.assertEqual(errors, [])
+
+    def test_checker_wrong_arity_imported_function(self):
+        from ixx.parser import parse
+        from ixx.modules import resolve_imports
+        from ixx.checker import SemanticChecker
+        self._write("helpers.ixx", "function double x\n- return x * 2\n")
+        prog = parse('use "helpers.ixx"\nx = double(1, 2, 3)\nsay x')
+        imported = resolve_imports(prog, self._dir)
+        errors = SemanticChecker().check(prog, "main.ixx", imported)
+        msgs = [e.message for e in errors]
+        self.assertTrue(any("double" in m and "expects 1" in m for m in msgs))
+
+    def test_checker_duplicate_local_imported_function(self):
+        from ixx.parser import parse
+        from ixx.modules import resolve_imports
+        from ixx.checker import SemanticChecker
+        self._write("helpers.ixx", "function double x\n- return x * 2\n")
+        prog = parse('use "helpers.ixx"\nfunction double x\n- return x * 99\nsay double(1)')
+        imported = resolve_imports(prog, self._dir)
+        errors = SemanticChecker().check(prog, "main.ixx", imported)
+        self.assertTrue(any("double" in e.message for e in errors))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -137,7 +137,14 @@ class TryCatch:
     try_body:   list["Stmt"]
     catch_body: list["Stmt"] = field(default_factory=list)
 
-Stmt = Assign | If | Loop | Say | CallStmt | ReturnStmt | FuncDef | TryCatch
+@dataclass
+class UseStmt:
+    """use "file.ixx"  or  use std "module" import statement."""
+    kind: str          # "file" | "std"
+    path: str          # e.g. "helpers.ixx" or "time"
+    line: int | None = None
+
+Stmt = Assign | If | Loop | Say | CallStmt | ReturnStmt | FuncDef | TryCatch | UseStmt
 
 @dataclass
 class Program:

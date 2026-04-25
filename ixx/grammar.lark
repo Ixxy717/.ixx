@@ -12,6 +12,7 @@ statement: assignment _NEWLINE
          | return_stmt
          | func_def
          | try_stmt
+         | use_stmt
 
 // RHS is one or more comma-separated exprs.
 // Multiple → ListLit.  Single → plain value.  Transformer handles the distinction.
@@ -37,6 +38,10 @@ func_def: _FUNCTION_KW IDENTIFIER func_params? _NEWLINE block
 
 // try / catch error handling
 try_stmt: _TRY_KW _NEWLINE block (_CATCH_KW _NEWLINE block)?
+
+// use / import statement
+use_stmt: _USE_KW ESCAPED_STRING _NEWLINE         -> use_file
+        | _USE_KW _STD_KW ESCAPED_STRING _NEWLINE -> use_std
 
 // Comma-separated parameter names
 func_params: IDENTIFIER ("," IDENTIFIER)*
@@ -94,6 +99,8 @@ _FUNCTION_KW.2: /function(?![A-Za-z0-9_])/
 _RETURN_KW.2:   /return(?![A-Za-z0-9_])/
 _TRY_KW.2:      /try(?![A-Za-z0-9_])/
 _CATCH_KW.2:    /catch(?![A-Za-z0-9_])/
+_USE_KW.2:      /use(?![A-Za-z0-9_])/
+_STD_KW.2:      /std(?![A-Za-z0-9_])/
 
 // YES / NO are case-insensitive boolean literals.
 // Negative lookahead ensures they don't match as prefixes of identifiers

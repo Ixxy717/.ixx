@@ -15,7 +15,7 @@ from .ast_nodes import (
     Program, Assign, If, Loop, Say,
     IntLit, FloatLit, StrLit, BoolLit, NothingLit, ListLit, VarRef,
     NegOp, BinOp, Compare, AndOp, OrOp, NotOp,
-    CallExpr, CallStmt, ReturnStmt, FuncDef, TryCatch,
+    CallExpr, CallStmt, ReturnStmt, FuncDef, TryCatch, UseStmt,
     IXXValue, Expr, Stmt,
 )
 
@@ -50,14 +50,21 @@ class Interpreter:
         self._global_env: Environment = Environment()
         self._call_depth: int = 0
 
-    def run(self, program: Program) -> None:
+    def run(self, program: Program, extra_funcs: dict[str, FuncDef] | None = None) -> None:
         self._global_env = Environment()
-        self._func_table = {}
         self._call_depth = 0
 
-        # First pass: collect all FuncDef nodes so forward calls work.
+        # Seed the function table with imported functions.
+        self._func_table = dict(extra_funcs or {})
+
+        # First pass: collect local FuncDef nodes; check for duplicates with imports.
         for stmt in program.body:
             if isinstance(stmt, FuncDef):
+                if stmt.name in self._func_table:
+                    raise IXXRuntimeError(
+                        f"Duplicate function '{stmt.name}'. "
+                        "Function names must be unique across imports."
+                    )
                 self._func_table[stmt.name] = stmt
 
         # Second pass: execute all statements.
@@ -109,6 +116,9 @@ class Interpreter:
 
             case FuncDef():
                 pass  # already collected during the first pass in run()
+
+            case UseStmt():
+                pass  # already resolved by modules.resolve_imports() before run()
 
             case TryCatch(try_body=try_body, catch_body=catch_body):
                 try:

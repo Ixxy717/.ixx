@@ -223,6 +223,11 @@ Run-JsonCheck "json missing read literal" "StressTest\ExpectedFailures\bad-file-
 Run-JsonCheck "json invalid number literal" "StressTest\ExpectedFailures\bad-number-conversion.ixx" $false "Cannot convert"
 Run-JsonCheck "json empty do literal" "StressTest\ExpectedFailures\bad-do-empty.ixx" $false "empty command"
 Run-JsonCheck "json nontext do literal" "StressTest\ExpectedFailures\bad-do-nontext.ixx" $false "expects a shell command"
+Run-JsonCheck "json good import" "StressTest\CheckJson\good-import.ixx" $true
+Run-JsonCheck "json import missing file" "StressTest\CheckJson\bad-import-missing.ixx" $false "not found"
+Run-JsonCheck "json import cycle" "StressTest\CheckJson\bad-import-cycle.ixx" $false "Circular"
+Run-JsonCheck "json import duplicate" "StressTest\CheckJson\bad-import-duplicate.ixx" $false "Duplicate"
+Run-JsonCheck "json import wrong arity" "StressTest\CheckJson\bad-import-wrong-arity.ixx" $false "expects 1"
 
 Write-Host ""
 Write-Host "========================================"

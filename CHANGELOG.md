@@ -4,6 +4,24 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.5] — 2026-04-25: Local Module Imports and Standard Library
+
+### Added
+- **Local module imports** — `use "path/to/file.ixx"` loads function definitions from another IXX file, resolved relative to the importing file's directory.
+- **Standard library imports** — `use std "time"` and `use std "date"` load built-in IXX helper modules from `ixx/stdlib/`.
+- **Standard library foundation** — `ixx/stdlib/time.ixx` provides `time_greeting`, `minutes_to_hours`, `seconds_to_minutes`; `ixx/stdlib/date.ixx` provides `is_leap_year`, `days_in_february`, `is_valid_month`. All pure IXX — no new built-ins required.
+- **Import resolver** (`ixx/modules.py`) — handles file loading, recursive/transitive imports, cycle detection, and duplicate function name detection. Only `function` definitions are collected from imports; top-level statements in imported files never execute.
+- **`UseStmt` AST node** — `kind: "file" | "std"`, `path: str`, `line: int | None`.
+- **Grammar** — `use_stmt` rule with `_USE_KW` and `_STD_KW` terminals at priority 2.
+- **`IXXImportError`** — raised on missing file, circular import, or duplicate function name (with line info where available).
+- **Interpreter** — `run(program, extra_funcs)` accepts a dict of pre-resolved imported functions; duplicate local/imported names raise `IXXRuntimeError`.
+- **Checker** — `check(program, file, imported_funcs)` validates imported function arity and detects local/imported name collisions; `UseStmt` nodes are silently skipped.
+- **CLI** — `ixx run` and `ixx check` (both human-readable and `--json`) resolve imports before execution/checking; import errors are reported consistently in both modes.
+- **StressTest** — 6 new positive tests (41–46), 5 new expected-failure files, 5 new `CheckJson` cases. Final counts: FILE PASS 46, JSON PASS 16, EXPECTED FAIL PASS 21.
+- **Unit tests** — `TestImports` class with 19 tests covering grammar, resolver, interpreter, stdlib, and checker.
+
+---
+
 ## [0.6.4.2] — Fix: literal diagnostics no longer fire inside blocks
 
 ### Fixed

@@ -15,6 +15,8 @@ Checks performed:
      loop bodies, try blocks, and catch blocks.
      For read()/readlines() the check is also suppressed when any write() or
      append() to the same literal path appears anywhere in the program.
+  6. Import errors (missing file, circular import, duplicate function) reported
+     as CheckErrors when imported_funcs has already been resolved outside.
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ from dataclasses import dataclass
 
 from .ast_nodes import (
     Program, Assign, If, Loop, Say,
-    CallExpr, CallStmt, FuncDef, ReturnStmt, TryCatch,
+    CallExpr, CallStmt, FuncDef, ReturnStmt, TryCatch, UseStmt,
     VarRef, BinOp, NegOp, Compare, AndOp, OrOp, NotOp,
     ListLit, StrLit, IntLit, FloatLit, BoolLit, NothingLit,
 )
@@ -113,7 +115,12 @@ class CheckError:
 class SemanticChecker:
     """Walk a Program AST and return a list of semantic errors."""
 
-    def check(self, program: Program, file_path: str) -> list[CheckError]:
+    def check(
+        self,
+        program: Program,
+        file_path: str,
+        imported_funcs: dict[str, FuncDef] | None = None,
+    ) -> list[CheckError]:
         self._file = file_path
         self._errors: list[CheckError] = []
 
@@ -121,12 +128,20 @@ class SemanticChecker:
         # Literal built-in checks only fire when this is 0 (true top level).
         self._literal_depth: int = 0
 
-        # First pass: collect user-defined function signatures.
-        self._func_table: dict[str, FuncDef] = {
-            stmt.name: stmt
-            for stmt in program.body
-            if isinstance(stmt, FuncDef)
-        }
+        # Seed func_table with imported functions.
+        self._func_table: dict[str, FuncDef] = dict(imported_funcs or {})
+
+        # First pass: collect local FuncDef, reporting duplicates with imports.
+        for stmt in program.body:
+            if isinstance(stmt, FuncDef):
+                if stmt.name in self._func_table:
+                    self._err(
+                        stmt.line, None,
+                        f"Duplicate function '{stmt.name}'. "
+                        "Function names must be unique across imports."
+                    )
+                else:
+                    self._func_table[stmt.name] = stmt
 
         # Second pass: collect every name ever assigned anywhere in the file.
         self._all_assigned: set[str] = set()
@@ -134,8 +149,6 @@ class SemanticChecker:
         self._collect_names(program.body)
 
         # Third pass: collect all literal file paths written/appended anywhere.
-        # Used to suppress false-positive read/readlines warnings when a script
-        # writes a file before reading it back.
         self._written_paths: set[str] = set()
         self._collect_written_paths(program.body)
 
@@ -166,6 +179,7 @@ class SemanticChecker:
                     self._has_catch = True
                     self._all_assigned.add("error")
                     self._collect_names(stmt.catch_body)
+            # UseStmt: no names to collect
 
     # ── written-paths collection pass ────────────────────────────────────────
 
@@ -189,6 +203,7 @@ class SemanticChecker:
             elif isinstance(stmt, TryCatch):
                 self._collect_written_paths(stmt.try_body)
                 self._collect_written_paths(stmt.catch_body)
+            # UseStmt: no writes to track
 
     def _scan_expr_for_writes(self, expr) -> None:
         if isinstance(expr, CallExpr) and expr.name in ("write", "append"):
@@ -231,6 +246,7 @@ class SemanticChecker:
                 self._check_stmts(stmt.try_body, in_function)
                 self._check_stmts(stmt.catch_body, in_function)
                 self._literal_depth -= 1
+            # UseStmt: nothing to check here (resolved before check() is called)
 
     # ── expression walk ──────────────────────────────────────────────────────
 
@@ -273,7 +289,7 @@ class SemanticChecker:
         for arg in args:
             self._check_expr(arg, in_function)
 
-        # User-defined function?
+        # User-defined function (local or imported)?
         if name in self._func_table:
             func = self._func_table[name]
             expected = len(func.params)
@@ -321,15 +337,8 @@ class SemanticChecker:
     ) -> None:
         """Conservative literal-argument validation for specific built-ins.
 
-        Only fires when:
-          - _literal_depth == 0  (true top-level, not inside any block)
-          - The argument is a known literal (string, number, bool, nothing).
-
-        If the argument is a variable or expression, skips silently.
-        For read()/readlines(), also skips when the same literal path is written
-        anywhere in the program (the file may be created at runtime before the read).
+        Only fires when _literal_depth == 0 (true top-level, not inside any block).
         """
-        # Guard: only check at true top level.
         if self._literal_depth > 0:
             return
 
@@ -338,7 +347,6 @@ class SemanticChecker:
 
         arg0 = args[0]
 
-        # ── color(name, text) ─────────────────────────────────────────────
         if name == "color":
             s = _lit_str(arg0)
             if s is not None:
@@ -349,7 +357,6 @@ class SemanticChecker:
                         f"Unknown color '{s}'.  Valid colors: {valid_list}."
                     )
 
-        # ── read(path) / readlines(path) ──────────────────────────────────
         elif name in ("read", "readlines"):
             s = _lit_str(arg0)
             if (
@@ -359,7 +366,6 @@ class SemanticChecker:
             ):
                 self._err(line, None, f"File not found: {s}")
 
-        # ── first/last/sort/reverse — must be list ────────────────────────
         elif name in ("first", "last", "sort", "reverse"):
             t = _lit_type_name(arg0)
             if t is not None:
@@ -368,7 +374,6 @@ class SemanticChecker:
                     f"'{name}' works on lists, not {t}."
                 )
 
-        # ── count — works on text and lists, not numbers/bools/nothing ────
         elif name == "count":
             t = _lit_type_name(arg0)
             if t in ("number", "bool", "nothing"):
@@ -377,7 +382,6 @@ class SemanticChecker:
                     f"'count' works on lists and text, not {t}."
                 )
 
-        # ── number(x) — catch obviously un-convertible string literals ────
         elif name == "number":
             s = _lit_str(arg0)
             if s is not None:
@@ -392,7 +396,6 @@ class SemanticChecker:
                             f"Cannot convert '{s}' to a number."
                         )
 
-        # ── do(command) — empty string or non-text literal ────────────────
         elif name == "do":
             s = _lit_str(arg0)
             if s is not None:

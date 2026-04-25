@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ixx"
-version = "0.6.4.2"
+version = "0.6.5"
 description = "IXX — executable checklist-style code"
 readme = "README.md"
 license = { text = "MIT" }
@@ -37,4 +37,4 @@ where = ["."]
 exclude = ["assets*", "tests*"]
 
 [tool.setuptools.package-data]
-ixx = ["**/*.lark", "**/*.json", "assets/*.ico", "assets/*.ixx"]
+ixx = ["**/*.lark", "**/*.json", "assets/*.ico", "assets/*.ixx", "stdlib/*.ixx"]
