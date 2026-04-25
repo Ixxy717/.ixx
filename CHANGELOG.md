@@ -4,6 +4,24 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.2.3] — showoff: OLD WAY -> IXX WAY comparisons, readable pacing
+
+### Changed
+- **`ixx showoff` completely rewritten** with OLD WAY → IXX WAY comparison panels:
+  - PowerShell wifi IP / RAM / CPU vs `ixx do "wifi ip"` / `"ram used"` / `"cpu info"`
+  - Python file I/O vs `read("notes.txt")`
+  - C-like if/else vs IXX readable conditionals
+  - Python try/except vs IXX try/catch
+- **Pacing fixed**: inter-line pauses 0.45s, code-to-output pause 0.80s (actually followable now)
+- **New sections**: VARIABLES+INTERPOLATION, FILES+ERRORS, BUILT-INS code/output reveals
+- **Full mode** adds: BUILT-INS, NATIVE COMMANDS note, A REAL SCRIPT, TIMELINE, slogans
+- **Quick mode** shows one shell comparison, one function reveal, validation, final (~8s)
+- **Plain mode** includes all default sections instantly, ASCII-only
+- **`ixx> showoff`** works inside the shell (added in 0.6.2.2, documented here)
+- Tests expanded to 29 showoff tests; suite total: 507 passing.
+
+---
+
 ## [0.6.2.2] — showoff upgrade: cinematic terminal trailer
 
 ### Changed

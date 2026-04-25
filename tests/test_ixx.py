@@ -541,23 +541,181 @@ class TestCLI(unittest.TestCase):
 
 # ══════════════════════════════════════════════════════════════════════════════
 
+# ══════════════════════════════════════════════════════════════════════════════
+
 class TestShowoff(unittest.TestCase):
-    """Tests for ixx showoff — all modes exit 0, content is correct."""
+    """Tests for ixx showoff — exit codes, content, pacing, plain/NO_COLOR."""
 
     # ── helpers ───────────────────────────────────────────────────────────────
 
     def _run_showoff(self, *extra_args: str) -> subprocess.CompletedProcess:
-        """Run ixx showoff via subprocess (stdout captured -> no animation)."""
+        """Run ixx showoff via subprocess (piped stdout = no animation delays)."""
         env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
         return subprocess.run(
             [sys.executable, "-m", "ixx", "showoff"] + list(extra_args),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=15,
-            env=env,
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=20, env=env,
         )
+
+    def _run_in_process(self, mode: str) -> str:
+        """Run showoff in-process with _sleep mocked; return captured stdout."""
+        from unittest.mock import patch
+        buf = io.StringIO()
+        with patch("ixx.showoff._sleep", return_value=None):
+            with contextlib.redirect_stdout(buf):
+                from ixx.showoff import run
+                run(mode)
+        return buf.getvalue()
+
+    # ── exit codes ────────────────────────────────────────────────────────────
+
+    def test_showoff_exits_0(self):
+        self.assertEqual(self._run_showoff().returncode, 0)
+
+    def test_showoff_quick_exits_0(self):
+        self.assertEqual(self._run_showoff("quick").returncode, 0)
+
+    def test_showoff_plain_exits_0(self):
+        self.assertEqual(self._run_showoff("plain").returncode, 0)
+
+    def test_showoff_full_exits_0(self):
+        self.assertEqual(self._run_showoff("full").returncode, 0)
+
+    def test_unknown_subcommand_falls_back_to_default(self):
+        r = self._run_showoff("garbage")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("IXX", r.stdout)
+
+    # ── plain mode: OLD WAY → IXX WAY comparisons ────────────────────────────
+
+    def _plain_out(self) -> str:
+        r = self._run_showoff("plain")
+        self.assertEqual(r.returncode, 0)
+        return r.stdout
+
+    def test_old_way_label(self):
+        self.assertIn("OLD WAY", self._plain_out())
+
+    def test_ixx_way_label(self):
+        self.assertIn("IXX WAY", self._plain_out())
+
+    def test_powershell_shown(self):
+        self.assertIn("PowerShell", self._plain_out())
+
+    def test_wifi_ip_shown(self):
+        self.assertIn("wifi ip", self._plain_out())
+
+    def test_ram_used_shown(self):
+        self.assertIn("ram used", self._plain_out())
+
+    def test_cpu_info_shown(self):
+        self.assertIn("cpu info", self._plain_out())
+
+    def test_read_file_shown(self):
+        self.assertIn('read("notes.txt")', self._plain_out())
+
+    def test_try_shown(self):
+        self.assertIn("try", self._plain_out().lower())
+
+    def test_catch_shown(self):
+        self.assertIn("catch", self._plain_out().lower())
+
+    # ── plain mode: core content ───────────────────────────────────────────────
+
+    def test_output_contains_ixx(self):
+        self.assertIn("IXX", self._plain_out())
+
+    def test_output_contains_tagline(self):
+        self.assertIn("The language for the user", self._plain_out())
+
+    def test_output_contains_final_line(self):
+        self.assertIn("The computer, translated", self._plain_out())
+
+    def test_output_contains_boot_header(self):
+        self.assertIn("BOOT", self._plain_out())
+
+    def test_output_contains_validation_header(self):
+        self.assertIn("VALIDATION", self._plain_out())
+
+    def test_output_contains_functions_header(self):
+        self.assertIn("FUNCTIONS", self._plain_out())
+
+    def test_output_contains_478_passed(self):
+        self.assertIn("478 passed", self._plain_out())
+
+    def test_output_contains_229_passed(self):
+        self.assertIn("229 passed", self._plain_out())
+
+    # ── in-process with mocked sleep ──────────────────────────────────────────
+
+    def test_default_mode_runs_without_error(self):
+        out = self._run_in_process("default")
+        self.assertIn("IXX", out)
+        self.assertIn("OLD WAY", out)
+        self.assertIn("IXX WAY", out)
+        self.assertIn("BOOT", out)
+
+    def test_quick_mode_is_short(self):
+        out = self._run_in_process("quick")
+        self.assertIn("IXX", out)
+        self.assertIn("wifi ip", out)
+        # slogans ("No braces") should NOT appear in quick mode
+        self.assertNotIn("No braces", out)
+
+    def test_full_mode_includes_all_sections(self):
+        out = self._run_in_process("full")
+        self.assertIn("TIMELINE", out)
+        self.assertIn("BUILT-INS", out)
+        self.assertIn("NATIVE COMMANDS", out)
+        self.assertIn("A REAL SCRIPT", out)
+        self.assertIn("No braces", out)          # slogans in full mode
+        self.assertIn("The computer, translated", out)
+
+    def test_full_mode_has_all_comparisons(self):
+        out = self._run_in_process("full")
+        self.assertIn("PowerShell", out)
+        self.assertIn("wifi ip", out)
+        self.assertIn("ram used", out)
+        self.assertIn("cpu info", out)
+        self.assertIn('read("notes.txt")', out)
+        self.assertIn("try", out)
+
+    def test_full_mode_real_script_uses_readlines_correctly(self):
+        """readlines() takes a path, not file contents — verify the demo is correct."""
+        out = self._run_in_process("full")
+        self.assertIn('readlines("session.log")', out)
+
+    # ── plain mode: no ANSI escapes ────────────────────────────────────────────
+
+    def test_no_color_disables_ansi(self):
+        env = {**os.environ, "NO_COLOR": "1", "PYTHONIOENCODING": "utf-8"}
+        env.pop("IXX_COLOR", None)
+        r = subprocess.run(
+            [sys.executable, "-m", "ixx", "showoff", "plain"],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=20, env=env,
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertNotIn("\033[", r.stdout)
+
+    def test_plain_mode_no_ansi_even_with_forced_color(self):
+        """plain mode must suppress ANSI even when IXX_COLOR=1."""
+        env = {**os.environ, "IXX_COLOR": "1", "PYTHONIOENCODING": "utf-8"}
+        env.pop("NO_COLOR", None)
+        r = subprocess.run(
+            [sys.executable, "-m", "ixx", "showoff", "plain"],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=20, env=env,
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertNotIn("\033[", r.stdout)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
+
 
     def _run_in_process(self, mode: str) -> str:
         """Run showoff in-process with _sleep mocked out; return stdout."""

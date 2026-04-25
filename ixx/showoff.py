@@ -1,12 +1,18 @@
 """
 IXX Showoff -- cinematic terminal presentation.
 
-    ixx showoff              default (~15s animated)
-    ixx showoff quick        short trailer (~5s)
-    ixx showoff full         extended + release timeline
+    ixx showoff              default  (~30s animated)
+    ixx showoff quick        trailer  (~8s)
+    ixx showoff full         extended (~50s)
     ixx showoff plain        no animation, ASCII fallback
 
-All sleep calls go through _sleep() so tests can mock it to return_value=None.
+Pacing intent
+  OLD WAY lines type fast   (0.010s/char)  -- messy, overwhelming feel
+  IXX WAY lines type slowly (0.028s/char)  -- deliberate, clean feel
+  Code reveals type at 0.024s/char with readable inter-line pauses
+
+All _sleep() calls route through the module-level _sleep() wrapper
+so tests can mock it with return_value=None for instant runs.
 """
 
 from __future__ import annotations
@@ -18,7 +24,7 @@ import shutil
 from typing import Optional
 
 
-# ── ANSI codes ────────────────────────────────────────────────────────────────
+# ── ANSI constants ─────────────────────────────────────────────────────────────
 
 _BOLD   = "\033[1m"
 _DIM    = "\033[2m"
@@ -27,6 +33,8 @@ _GREEN  = "\033[32m"
 _YELLOW = "\033[33m"
 _RESET  = "\033[0m"
 
+
+# ── Terminal detection ─────────────────────────────────────────────────────────
 
 def _ansi_ok() -> bool:
     """True if ANSI escape codes will render (mirrors renderer._enable_ansi)."""
@@ -58,14 +66,14 @@ def _ansi_ok() -> bool:
 def _unicode_ok() -> bool:
     enc = getattr(sys.stdout, "encoding", None) or "utf-8"
     try:
-        "│█░".encode(enc)
+        "\u2502\u2588\u2591\u2192\u2500\u2550".encode(enc)
         return True
     except (UnicodeEncodeError, LookupError):
         return False
 
 
 def _c(code: str, text: str, *, plain: bool = False) -> str:
-    """Apply ANSI code to text, respecting plain mode and NO_COLOR."""
+    """Return ANSI-coded text; always plain when plain=True."""
     if plain:
         return text
     return f"{code}{text}{_RESET}" if _ansi_ok() else text
@@ -78,16 +86,16 @@ def _width() -> int:
         return 80
 
 
-# ── Timing (mock this in tests) ────────────────────────────────────────────────
+# ── Timing (mock _sleep in tests) ─────────────────────────────────────────────
 
 def _sleep(seconds: float) -> None:
     time.sleep(seconds)
 
 
-# ── Primitives ────────────────────────────────────────────────────────────────
+# ── Primitives ─────────────────────────────────────────────────────────────────
 
 def type_line(text: str, delay: float = 0.025, *, plain: bool = False) -> None:
-    """Type plain text char-by-char. Do NOT pass pre-colored text here."""
+    """Type plain (un-colored) text char-by-char. Instant when not a tty."""
     if plain or not sys.stdout.isatty():
         print(text)
         return
@@ -97,16 +105,15 @@ def type_line(text: str, delay: float = 0.025, *, plain: bool = False) -> None:
     print()
 
 
-def _type_col(code: str, text: str, delay: float = 0.025, *,
-              plain: bool = False) -> None:
-    """Type text with ANSI color wrapping; plain mode prints without color."""
+def _type_col(code: str, text: str, delay: float = 0.025,
+              *, plain: bool = False) -> None:
+    """Type text with an ANSI color wrapping the whole sequence."""
     if plain:
         print(text)
         return
     if not sys.stdout.isatty():
         print(_c(code, text))
         return
-    # Animated path: emit ANSI start, type chars, reset
     if _ansi_ok():
         print(code, end="", flush=True)
     for ch in text:
@@ -118,6 +125,7 @@ def _type_col(code: str, text: str, delay: float = 0.025, *,
 
 
 def pause(seconds: float, *, plain: bool = False, quick: bool = False) -> None:
+    """Pause only on a real interactive TTY; quick mode uses 30% of the time."""
     if not plain and sys.stdout.isatty():
         _sleep(seconds * 0.30 if quick else seconds)
 
@@ -125,43 +133,119 @@ def pause(seconds: float, *, plain: bool = False, quick: bool = False) -> None:
 # ── Layout helpers ─────────────────────────────────────────────────────────────
 
 def _hr(label: str, *, plain: bool = False) -> None:
-    """Section header:  == LABEL ==  or  ══ LABEL ══"""
-    uni = _unicode_ok() and not plain
-    eq  = "\u2550" if uni else "="   # ═
+    uni  = _unicode_ok() and not plain
+    eq   = "\u2550" if uni else "="      # ═
     line = f"  {eq}{eq} {label} {eq}{eq}"
     print()
     print(_c(_BOLD, line, plain=plain))
     print()
 
 
-def _bar_line(label: str, value_str: str, *, plain: bool = False,
-              quick: bool = False) -> None:
-    """Animated fill bar.  [████████████████████] label    value"""
+def _divider(*, plain: bool = False) -> None:
+    uni = _unicode_ok() and not plain
+    ch  = "\u2500" if uni else "-"       # ─
+    print(f"  {_c(_DIM, ch * 62, plain=plain)}")
+
+
+def _bar_line(label: str, value_str: str, *,
+              plain: bool = False, quick: bool = False) -> None:
+    """Animated fill bar:  [████████████████████] label   value"""
     W   = 20
     uni = _unicode_ok() and not plain
-    FIL = "\u2588" if uni else "#"   # █
-    EMP = "\u2591" if uni else "."   # ░
+    FIL = "\u2588" if uni else "#"       # █
+    EMP = "\u2591" if uni else "."       # ░
 
     if plain or not sys.stdout.isatty():
-        print(f"  [{FIL * W}] {label:<22} {value_str}")
+        print(f"  [{FIL * W}] {label:<24} {value_str}")
         return
 
-    delay = 0.008 if quick else 0.018
+    delay = 0.008 if quick else 0.020
     for i in range(W + 1):
-        bar  = FIL * i + EMP * (W - i)
-        val  = _c(_GREEN, value_str)
-        print(f"\r  [{bar}] {label:<22} {val}", end="", flush=True)
+        bar = FIL * i + EMP * (W - i)
+        val = _c(_GREEN, value_str)
+        print(f"\r  [{bar}] {label:<24} {val}", end="", flush=True)
         if i < W:
             _sleep(delay)
     print()
 
 
-# ── Sections ──────────────────────────────────────────────────────────────────
+def _comparison(
+    old_label: str,
+    old_lines: list[str],
+    ixx_lines: list[str],
+    ixx_output: Optional[list[str]] = None,
+    *,
+    plain: bool = False,
+    quick: bool = False,
+    planned: bool = False,
+) -> None:
+    """
+    Print one OLD WAY → IXX WAY comparison block.
+    OLD WAY types fast (messy/overwhelming), IXX WAY types slowly (clear/powerful).
+    """
+    d_old = 0.006 if quick else 0.010   # fast -- feels messy
+    d_ixx = 0.012 if quick else 0.028   # slow -- feels deliberate
+
+    # ── OLD WAY ────────────────────────────────────────────────────────────────
+    print(f"  {_c(_DIM, f'OLD WAY: {old_label}', plain=plain)}")
+    for line in old_lines:
+        type_line(f"    {line}", delay=d_old, plain=plain)
+    pause(0.45, plain=plain, quick=quick)
+    print()
+
+    # ── IXX WAY ────────────────────────────────────────────────────────────────
+    note = "  (planned)" if planned else ""
+    print(f"  {_c(_BOLD + _CYAN, f'IXX WAY{note}', plain=plain)}")
+    for line in ixx_lines:
+        _type_col(_CYAN, f"    {line}", delay=d_ixx, plain=plain)
+        pause(0.28, plain=plain, quick=quick)
+
+    if ixx_output:
+        pause(0.40, plain=plain, quick=quick)
+        for out in ixx_output:
+            print(f"    {_c(_GREEN, out, plain=plain)}")
+
+    print()
+    pause(0.45, plain=plain, quick=quick)
+    _divider(plain=plain)
+    print()
+    pause(0.22, plain=plain, quick=quick)
+
+
+def _code_reveal(
+    code_lines: list[str],
+    output_lines: list[str],
+    *,
+    plain: bool = False,
+    quick: bool = False,
+) -> None:
+    """Show CODE block, pause, then reveal OUTPUT."""
+    d = 0.010 if quick else 0.024
+    p = 0.08  if quick else 0.28    # inter-line pause inside code block
+
+    print(f"  {_c(_DIM, 'CODE', plain=plain)}")
+    for line in code_lines:
+        if line:
+            _type_col(_CYAN, f"    {line}", delay=d, plain=plain)
+            pause(p, plain=plain)
+        else:
+            print()
+
+    pause(0.20 if quick else 0.80, plain=plain)
+    print()
+    print(f"  {_c(_GREEN, 'OUTPUT', plain=plain)}")
+    for line in output_lines:
+        print(f"    {_c(_GREEN, line, plain=plain)}")
+    print()
+    pause(0.15 if quick else 0.55, plain=plain)
+
+
+# ── Sections ───────────────────────────────────────────────────────────────────
 
 def _section_boot(*, plain: bool = False, quick: bool = False) -> None:
     _hr("BOOT", plain=plain)
 
-    d = 0.012 if quick else 0.026
+    d    = 0.012 if quick else 0.022
     msgs = ["> booting IXX...", "> ready."] if quick else [
         "> booting IXX...",
         "> loading readable syntax...",
@@ -171,180 +255,316 @@ def _section_boot(*, plain: bool = False, quick: bool = False) -> None:
     ]
     for msg in msgs:
         _type_col(_DIM, f"  {msg}", delay=d, plain=plain)
-        pause(0.08, plain=plain, quick=quick)
+        pause(0.15 if quick else 0.45, plain=plain)
 
-    pause(0.5, plain=plain, quick=quick)
+    pause(0.30 if quick else 0.55, plain=plain)
     print()
 
-    # Big title
-    _type_col(_BOLD + _CYAN, "  IXX", delay=0.10, plain=plain)
-    pause(0.20, plain=plain, quick=quick)
-    type_line("  The language for the user.", delay=0.022, plain=plain)
-    pause(0.15, plain=plain, quick=quick)
-    type_line("  The computer, translated.", delay=0.022, plain=plain)
-    pause(0.65, plain=plain, quick=quick)
+    _type_col(_BOLD + _CYAN, "  IXX", delay=0.06 if quick else 0.10, plain=plain)
+    pause(0.10 if quick else 0.22, plain=plain)
+    type_line("  The language for the user.", delay=0.015 if quick else 0.022, plain=plain)
+    pause(0.08 if quick else 0.15, plain=plain)
+    type_line("  The computer, translated.", delay=0.015 if quick else 0.022, plain=plain)
+    pause(0.30 if quick else 0.65, plain=plain)
 
 
 def _section_slogans(*, plain: bool = False) -> None:
-    lines = [
+    """Personality lines shown in full mode before comparisons."""
+    slogans = [
         "No braces.",
         "No semicolons.",
         "No guessing what -gt means.",
         "Just instructions.",
     ]
     print()
-    for line in lines:
-        _type_col(_BOLD, f"  {line}", delay=0.032, plain=plain)
-        pause(0.10, plain=plain)
-    pause(0.35, plain=plain)
+    for s in slogans:
+        _type_col(_BOLD, f"  {s}", delay=0.030, plain=plain)
+        pause(0.45, plain=plain)
+    pause(0.30, plain=plain)
     type_line("  The terminal starts speaking human.", delay=0.020, plain=plain)
     pause(0.70, plain=plain)
 
 
-def _section_before_after(*, plain: bool = False, quick: bool = False) -> None:
-    _hr("READABLE CODE", plain=plain)
-    d = 0.010 if quick else 0.022
+def _section_comparisons(*,
+                          plain: bool = False,
+                          quick: bool = False,
+                          full: bool = False) -> None:
+    """
+    OLD WAY → IXX WAY comparison panels.
+    quick  : 1 comparison  (wifi ip)
+    default: 3 comparisons (combined shell commands + if/else)
+    full   : 5 comparisons (individual shell + 3 code comparisons)
+    """
+    # ── comparison data ────────────────────────────────────────────────────────
 
-    # Comparison 1: conditional
-    print(f"  {_c(_DIM, 'BEFORE', plain=plain)}")
-    _type_col(_DIM, '    if ($score -gt 90) { Write-Output "Excellent" }',
-              delay=d, plain=plain)
-    pause(0.35, plain=plain, quick=quick)
-    print()
-    print(f"  {_c(_BOLD + _CYAN, 'WITH IXX', plain=plain)}")
-    for line in ["if score more than 90", '- say "Excellent"']:
-        _type_col(_CYAN, f"    {line}", delay=d, plain=plain)
-        pause(0.25, plain=plain, quick=quick)
-    print()
-    pause(0.40, plain=plain, quick=quick)
+    # Combined shell commands shown in default mode
+    shell_combined = dict(
+        old_label="PowerShell",
+        old_lines=[
+            "Get-NetIPAddress ... | Where-Object {$_.InterfaceAlias -match 'Wi-Fi'} | ...",
+            "Get-CimInstance Win32_OperatingSystem | Select-Object FreePhysicalMemory",
+            "Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores",
+        ],
+        ixx_lines=[
+            'ixx do "wifi ip"',
+            'ixx do "ram used"',
+            'ixx do "cpu info"',
+        ],
+        ixx_output=[
+            "192.168.1.104",
+            "Used:  15.2 GB",
+            "Intel Core i9 / 14 cores / 28 threads",
+        ],
+    )
 
-    if not quick:
-        # Comparison 2: try/catch
-        print(f"  {_c(_DIM, 'BEFORE', plain=plain)}")
-        for line in [
+    # Individual shell commands used in full mode
+    shell_wifi = dict(
+        old_label="PowerShell",
+        old_lines=[
+            "Get-NetIPAddress -AddressFamily IPv4 |",
+            "  Where-Object {$_.InterfaceAlias -match 'Wi-Fi'} |",
+            "  Select-Object IPAddress",
+        ],
+        ixx_lines=['ixx do "wifi ip"'],
+        ixx_output=["192.168.1.104"],
+    )
+    shell_ram = dict(
+        old_label="PowerShell",
+        old_lines=[
+            "Get-CimInstance Win32_OperatingSystem |",
+            "  Select-Object TotalVisibleMemorySize, FreePhysicalMemory",
+        ],
+        ixx_lines=['ixx do "ram used"'],
+        ixx_output=["Used:  15.2 GB"],
+    )
+    shell_cpu = dict(
+        old_label="PowerShell",
+        old_lines=[
+            "Get-CimInstance Win32_Processor |",
+            "  Select-Object Name, NumberOfCores, NumberOfLogicalProcessors",
+        ],
+        ixx_lines=['ixx do "cpu info"'],
+        ixx_output=["Intel Core i9 / 14 cores / 28 threads"],
+    )
+    code_file = dict(
+        old_label="Python",
+        old_lines=[
+            'with open("notes.txt", "r", encoding="utf-8") as f:',
+            "    content = f.read()",
+            "print(content)",
+        ],
+        ixx_lines=[
+            'content = read("notes.txt")',
+            "say content",
+        ],
+    )
+    code_ifelse = dict(
+        old_label="C-like / JavaScript",
+        old_lines=[
+            "if (score > 90) {",
+            '    console.log("Excellent");',
+            "} else {",
+            '    console.log("Keep going");',
+            "}",
+        ],
+        ixx_lines=[
+            "if score more than 90",
+            '- say "Excellent"',
+            "else",
+            '- say "Keep going"',
+        ],
+    )
+    code_try = dict(
+        old_label="Python",
+        old_lines=[
             "try:",
             '    content = open("config.txt").read()',
             "except Exception as e:",
-            "    print(e)",
-        ]:
-            _type_col(_DIM, f"    {line}", delay=d, plain=plain)
-        pause(0.35, plain=plain)
-        print()
-        print(f"  {_c(_BOLD + _CYAN, 'WITH IXX', plain=plain)}")
-        for line in [
+            '    print(f"Using defaults: {e}")',
+        ],
+        ixx_lines=[
             "try",
             '- content = read("config.txt")',
             "catch",
-            '- say "Could not read: {error}"',
-        ]:
-            _type_col(_CYAN, f"    {line}", delay=d, plain=plain)
-            pause(0.20, plain=plain)
-        print()
-        pause(0.55, plain=plain)
+            '- say "Using defaults: {error}"',
+        ],
+    )
+
+    # ── select comparisons for this mode ──────────────────────────────────────
+    if quick:
+        chosen = [shell_wifi]
+    elif full:
+        chosen = [shell_wifi, shell_ram, shell_cpu, code_file, code_ifelse, code_try]
+    else:
+        # default: combined shell block + one code comparison
+        chosen = [shell_combined, code_ifelse]
+
+    arrow = "\u2192" if _unicode_ok() and not plain else "->"
+    _hr(f"OLD WAY  {arrow}  IXX WAY", plain=plain)
+
+    for comp in chosen:
+        _comparison(**comp, plain=plain, quick=quick)
+
+
+def _section_native_note(*, plain: bool = False) -> None:
+    """IXX does not replace what you already know. (full mode only)"""
+    _hr("NATIVE COMMANDS", plain=plain)
+    content = [
+        "IXX does not replace what you already know.",
+        "It gives you a home base.",
+        "",
+        "KNOWN COMMAND:",
+        "  powershell -ExecutionPolicy Bypass -File setup.ps1",
+        "",
+        "PLANNED:",
+        '  native powershell "-ExecutionPolicy Bypass -File setup.ps1"',
+        "",
+        "Run old commands when you need them.",
+        "Learn the clean IXX version when one exists.",
+    ]
+    for line in content:
+        print(f"  {line}" if line else "")
+        pause(0.14, plain=plain)
+    print()
+    pause(0.50, plain=plain)
+
+
+def _section_interpolation(*, plain: bool = False, quick: bool = False) -> None:
+    _hr("VARIABLES + INTERPOLATION", plain=plain)
+    _code_reveal(
+        [
+            'name = "Ixxy"',
+            'say "Hello, {name}"',
+        ],
+        ["Hello, Ixxy"],
+        plain=plain, quick=quick,
+    )
+    pause(0.35, plain=plain, quick=quick)
 
 
 def _section_functions(*, plain: bool = False, quick: bool = False) -> None:
     _hr("FUNCTIONS", plain=plain)
-    d = 0.010 if quick else 0.022
+    _code_reveal(
+        [
+            "function double x",
+            "- return x * 2",
+            "",
+            "say double(21)",
+        ],
+        ["42"],
+        plain=plain, quick=quick,
+    )
+    pause(0.35, plain=plain, quick=quick)
 
-    print(f"  {_c(_DIM, 'CODE', plain=plain)}")
-    code = [
-        "function double x",
-        "- return x * 2",
-        "",
-        "numbers = 3, 7, 21",
-        "say double(first(numbers))",
-        "say double(last(numbers))",
-    ]
-    for line in code:
-        if line:
-            _type_col(_CYAN, f"    {line}", delay=d, plain=plain)
-        else:
-            print()
 
-    pause(0.50, plain=plain, quick=quick)
-    print()
-    print(f"  {_c(_GREEN, 'OUTPUT', plain=plain)}")
-    for line in ["6", "42"]:
-        print(f"    {_c(_GREEN, line, plain=plain)}")
-    print()
-    pause(0.50, plain=plain, quick=quick)
+def _section_builtins(*, plain: bool = False) -> None:
+    _hr("BUILT-INS", plain=plain)
+    _code_reveal(
+        [
+            'words = "apple", "banana", "grape", "cherry"',
+            "say upper(first(sort(words)))",
+            'say join(sort(words), " | ")',
+            "say round(3.14159, 2)",
+        ],
+        [
+            "APPLE",
+            "apple | banana | cherry | grape",
+            "3.14",
+        ],
+        plain=plain,
+    )
+    pause(0.35, plain=plain)
 
 
 def _section_files_errors(*, plain: bool = False) -> None:
     _hr("FILES + ERRORS", plain=plain)
-    d = 0.022
-
-    print(f"  {_c(_DIM, 'CODE', plain=plain)}")
-    code = [
-        'write "notes.txt", "IXX loaded."',
-        'append "notes.txt", "Session started."',
-        'lines = readlines("notes.txt")',
-        "say count(lines)",
-        "",
-        "result = nothing",
-        "try",
-        '- result = read("missing.txt")',
-        "catch",
-        '- say "Handled: {error}"',
-    ]
-    for line in code:
-        if line:
-            _type_col(_CYAN, f"    {line}", delay=d, plain=plain)
-        else:
-            print()
-
-    pause(0.50, plain=plain)
-    print()
-    print(f"  {_c(_GREEN, 'OUTPUT', plain=plain)}")
-    for line in ["2", "Handled: [file not found: missing.txt]"]:
-        print(f"    {_c(_GREEN, line, plain=plain)}")
-    print()
-    pause(0.50, plain=plain)
-
-
-def _section_system_commands(*, plain: bool = False, quick: bool = False) -> None:
-    _hr("SYSTEM COMMANDS", plain=plain)
-    d = 0.010 if quick else 0.022
-
-    cmds = [
-        ('ixx do "ram used"',  "Used:  15.2 GB"),
-        ('ixx do "cpu temp"',  "Temperature:  62 C"),
-        ('ixx do "wifi ip"',   "192.168.1.104"),
-    ] if not quick else [
-        ('ixx do "ram used"', "Used:  15.2 GB"),
-    ]
-
-    for cmd, output in cmds:
-        _type_col(_CYAN, f"  {cmd}", delay=d, plain=plain)
-        pause(0.20, plain=plain, quick=quick)
-        print(f"    {_c(_GREEN, output, plain=plain)}")
-        pause(0.30, plain=plain, quick=quick)
-        print()
+    _code_reveal(
+        [
+            'write "notes.txt", "Hello, Ixxy"',
+            'content = read("notes.txt")',
+            "say content",
+            "",
+            "try",
+            '- data = read("missing.txt")',
+            "catch",
+            '- say "Handled: {error}"',
+        ],
+        [
+            "Hello, Ixxy",
+            "Handled: [file not found: missing.txt]",
+        ],
+        plain=plain,
+    )
+    pause(0.35, plain=plain)
 
 
 def _section_validation(*, plain: bool = False, quick: bool = False) -> None:
-    _hr("VALIDATION", plain=plain)
-
+    _hr("VALIDATION MATRIX", plain=plain)
     type_line("  running validation matrix...", delay=0.015, plain=plain)
-    pause(0.40, plain=plain, quick=quick)
+    pause(0.35 if quick else 0.55, plain=plain)
     print()
 
     stats = [
-        ("unit tests",        "478 passed"),
-        ("stress files",      " 30 passed"),
-        ("IXX assertions",    "229 passed"),
-        ("expected failures", " 12 passed"),
+        ("Python unit tests",  "478 passed"),
+        ("StressTest files",   " 30 passed"),
+        ("IXX assertions",     "229 passed"),
+        ("Expected failures",  " 12 passed"),
     ]
     for label, value in stats:
         _bar_line(label, value, plain=plain, quick=quick)
-        pause(0.10, plain=plain, quick=quick)
+        pause(0.08 if quick else 0.18, plain=plain)
     print()
+    pause(0.35, plain=plain, quick=quick)
+
+
+def _section_real_script(*, plain: bool = False) -> None:
+    """A complete self-contained IXX script with output. (full mode only)"""
+    _hr("A REAL SCRIPT", plain=plain)
+
+    print(f"  {_c(_DIM, 'CODE', plain=plain)}")
+    script = [
+        'name = "Ixxy"',
+        "score = 95",
+        "",
+        'say "Checking {name} session..."',
+        "",
+        "if score more than 90",
+        '- say "Top scorer: {name}"',
+        "else",
+        '- say "Good effort: {name}"',
+        "",
+        'write "result.txt", "{name}: {score}"',
+        'say "Result saved."',
+        "",
+        "try",
+        '- log = readlines("session.log")',
+        '- say "Log entries: {count(log)}"',
+        "catch",
+        '- say "No previous log."',
+    ]
+    for line in script:
+        if line:
+            _type_col(_CYAN, f"    {line}", delay=0.018, plain=plain)
+            pause(0.20, plain=plain)
+        else:
+            print()
+
+    pause(0.80, plain=plain)
+    print()
+    print(f"  {_c(_GREEN, 'OUTPUT', plain=plain)}")
+    for line in [
+        "Checking Ixxy session...",
+        "Top scorer: Ixxy",
+        "Result saved.",
+        "No previous log.",
+    ]:
+        print(f"    {_c(_GREEN, line, plain=plain)}")
+    print()
+    pause(0.60, plain=plain)
 
 
 def _section_timeline(*, plain: bool = False) -> None:
     _hr("TIMELINE", plain=plain)
-
     milestones = [
         ("v0.1", "language booted"),
         ("v0.2", "interactive shell"),
@@ -355,19 +575,30 @@ def _section_timeline(*, plain: bool = False) -> None:
     ]
     for ver, desc in milestones:
         print(f"  {_c(_CYAN + _BOLD, ver, plain=plain)}  {desc}")
-        pause(0.18, plain=plain)
+        pause(0.22, plain=plain)
     print()
+    pause(0.50, plain=plain)
 
 
-def _section_final(*, plain: bool = False) -> None:
-    pause(0.45, plain=plain)
+def _section_final(*, plain: bool = False, quick: bool = False) -> None:
+    pause(0.40, plain=plain, quick=quick)
     print()
-    _type_col(_BOLD + _CYAN, "  IXX", delay=0.10, plain=plain)
-    pause(0.20, plain=plain)
-    type_line("  The computer, translated.", delay=0.022, plain=plain)
+    _type_col(_BOLD + _CYAN, "  IXX", delay=0.06 if quick else 0.10, plain=plain)
+    pause(0.12 if quick else 0.22, plain=plain)
+    type_line("  The language for the user.", delay=0.015 if quick else 0.022, plain=plain)
+    pause(0.08 if quick else 0.15, plain=plain)
+    type_line("  The computer, translated.", delay=0.015 if quick else 0.022, plain=plain)
+    pause(0.20 if quick else 0.65, plain=plain)
     print()
+
+    if not quick:
+        for s in ["No braces.", "No semicolons.", "No -gt.", "Just instructions."]:
+            _type_col(_BOLD, f"  {s}", delay=0.028, plain=plain)
+            pause(0.30, plain=plain)
+        print()
+
     print(f"  {_c(_DIM, 'pip install ixx', plain=plain)}  -  "
-          f"{_c(_DIM, 'ixx help', plain=plain)}")
+          f"{_c(_DIM, 'ixx showoff', plain=plain)}")
     print()
 
 
@@ -384,19 +615,27 @@ def run(mode: str = "default") -> None:
 
     _section_boot(plain=plain, quick=quick)
 
-    if not quick:
+    if full:
         _section_slogans(plain=plain)
 
-    _section_before_after(plain=plain, quick=quick)
+    _section_comparisons(plain=plain, quick=quick, full=full)
+
+    if not quick:
+        _section_interpolation(plain=plain, quick=quick)
+
     _section_functions(plain=plain, quick=quick)
 
     if not quick:
         _section_files_errors(plain=plain)
-        _section_system_commands(plain=plain, quick=quick)
+
+    if full:
+        _section_builtins(plain=plain)
+        _section_native_note(plain=plain)
 
     _section_validation(plain=plain, quick=quick)
 
     if full:
+        _section_real_script(plain=plain)
         _section_timeline(plain=plain)
 
-    _section_final(plain=plain)
+    _section_final(plain=plain, quick=quick)
