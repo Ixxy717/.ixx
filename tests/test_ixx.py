@@ -492,7 +492,114 @@ class TestCLI(unittest.TestCase):
         finally:
             bad.unlink(missing_ok=True)
 
-    def test_run_hello(self):
+    def test_check_json_valid(self):
+        """--json on a good file emits ok:true with empty errors array."""
+        import json
+        code, out = cli("check", "examples/hello.ixx", "--json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["errors"], [])
+        self.assertIn("hello.ixx", data["file"])
+
+    def test_check_json_invalid(self):
+        """--json on a bad file emits ok:false with at least one error entry."""
+        import json
+        bad = ROOT / "examples" / "_test_bad_json.ixx"
+        bad.write_text("if age less\n- say oops\n", encoding="utf-8")
+        try:
+            code, out = cli("check", "examples/_test_bad_json.ixx", "--json")
+            self.assertNotEqual(code, 0)
+            data = json.loads(out)
+            self.assertFalse(data["ok"])
+            self.assertGreater(len(data["errors"]), 0)
+            err = data["errors"][0]
+            self.assertIn("line", err)
+            self.assertIn("column", err)
+            self.assertIn("message", err)
+        finally:
+            bad.unlink(missing_ok=True)
+
+    def test_check_json_missing_file(self):
+        """--json on a non-existent file emits ok:false with a message."""
+        import json
+        code, out = cli("check", "examples/_does_not_exist.ixx", "--json")
+        self.assertNotEqual(code, 0)
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        self.assertGreater(len(data["errors"]), 0)
+
+    # ── semantic check tests ─────────────────────────────────────────────────
+
+    def test_check_semantic_wrong_arg_count(self):
+        """check catches wrong argument count for user-defined functions."""
+        code, out = cli("check", "StressTest/ExpectedFailures/bad-wrong-arg-count.ixx")
+        self.assertNotEqual(code, 0)
+        self.assertIn("check failed", out)
+        self.assertIn("expects 2", out)
+
+    def test_check_semantic_unknown_function(self):
+        """check catches calls to completely unknown functions."""
+        code, out = cli("check", "StressTest/ExpectedFailures/bad-unknown-function.ixx")
+        self.assertNotEqual(code, 0)
+        self.assertIn("check failed", out)
+        self.assertIn("not defined", out)
+
+    def test_check_semantic_wrong_builtin_arg_count(self):
+        """check catches wrong argument count for built-ins."""
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(suffix=".ixx", mode="w",
+                                        encoding="utf-8", delete=False) as f:
+            f.write('say upper("hello", "extra")\n')
+            tmp = f.name
+        try:
+            code, out = cli("check", tmp)
+            self.assertNotEqual(code, 0)
+            self.assertIn("check failed", out)
+            self.assertIn("upper", out)
+        finally:
+            os.unlink(tmp)
+
+    def test_check_semantic_undefined_variable(self):
+        """check catches obvious undefined variable references at top level."""
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(suffix=".ixx", mode="w",
+                                        encoding="utf-8", delete=False) as f:
+            f.write("say ghost\n")
+            tmp = f.name
+        try:
+            code, out = cli("check", tmp)
+            self.assertNotEqual(code, 0)
+            self.assertIn("check failed", out)
+            self.assertIn("ghost", out)
+        finally:
+            os.unlink(tmp)
+
+    def test_check_json_semantic_failure(self):
+        """--json emits ok:false with severity/line fields on semantic error."""
+        import json
+        code, out = cli("check", "StressTest/ExpectedFailures/bad-wrong-arg-count.ixx",
+                        "--json")
+        self.assertNotEqual(code, 0)
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        err = data["errors"][0]
+        self.assertIn("severity", err)
+        self.assertEqual(err["severity"], "error")
+        self.assertIsNotNone(err["line"])
+        self.assertIn("add", err["message"])
+
+    def test_check_json_success_schema(self):
+        """--json on a clean file returns the expected schema keys."""
+        import json
+        code, out = cli("check", "examples/hello.ixx", "--json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertIn("ok", data)
+        self.assertIn("file", data)
+        self.assertIn("errors", data)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["errors"], [])
         code, out = cli("run", "examples/hello.ixx")
         self.assertEqual(code, 0)
         self.assertIn("Hello World", out)
@@ -709,6 +816,76 @@ class TestShowoff(unittest.TestCase):
         )
         self.assertEqual(r.returncode, 0)
         self.assertNotIn("\033[", r.stdout)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# do() built-in — shell bridge
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestDoBuiltin(unittest.TestCase):
+
+    def _run(self, source: str) -> str:
+        """Execute IXX source and return combined stdout."""
+        return run(source)
+
+    def test_do_ram_used_returns_text(self):
+        """do('ram used') returns a non-empty string."""
+        result = self._run('x = do("ram used")\nsay x')
+        self.assertIsInstance(result, str)
+        self.assertGreater(len(result.strip()), 0)
+
+    def test_do_cpu_info_returns_text(self):
+        """do('cpu info') returns a non-empty string."""
+        result = self._run('x = do("cpu info")\nsay x')
+        self.assertIsInstance(result, str)
+        self.assertGreater(len(result.strip()), 0)
+
+    def test_do_wifi_ip_returns_text(self):
+        """do('wifi ip') returns text (may be unavailable message — must not raise)."""
+        # Alias 'wifi ip' → 'ip wifi'. Either a real IP or a friendly
+        # 'not available' message is acceptable; an exception is not.
+        result = self._run('x = do("wifi ip")\nsay x')
+        self.assertIsInstance(result, str)
+
+    def test_do_unknown_command_raises(self):
+        """do() with an unknown command raises IXXRuntimeError."""
+        from ixx.interpreter import IXXRuntimeError
+        with self.assertRaises(IXXRuntimeError):
+            self._run('x = do("thiscommanddoesnotexist")')
+
+    def test_do_result_is_ixx_string(self):
+        """Output of do() can be used as a text value in further expressions."""
+        result = self._run(
+            'x = do("ram used")\n'
+            'say count(x)'
+        )
+        # count() of the returned string is its length — must be a positive number
+        n = int(result.strip())
+        self.assertGreater(n, 0)
+
+    def test_do_try_catch_catches_failure(self):
+        """try/catch handles a do() failure gracefully."""
+        result = self._run(
+            'try\n'
+            '- result = do("thiscommanddoesnotexist")\n'
+            'catch\n'
+            '- say "caught"\n'
+            '- say error'
+        )
+        self.assertIn("caught", result)
+        self.assertIn("thiscommanddoesnotexist", result)
+
+    def test_do_cli_path_still_works(self):
+        """ixx do 'ram used' CLI path is unchanged."""
+        code, out = cli("do", "ram used")
+        self.assertEqual(code, 0)
+        self.assertGreater(len(out.strip()), 0)
+
+    def test_do_wrong_type_raises(self):
+        """do() with a non-text argument raises IXXRuntimeError."""
+        from ixx.interpreter import IXXRuntimeError
+        with self.assertRaises(IXXRuntimeError):
+            self._run("x = do(42)")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

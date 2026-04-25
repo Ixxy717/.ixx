@@ -24,6 +24,12 @@ env/
 *.vsix
 editor/vscode.zip
 
+# Node / VS Code extension build
+node_modules/
+editor/vscode/node_modules/
+editor/vscode/out/
+editor/vscode/package-lock.json
+
 # Temp / scratch files
 _*.txt
 _*.ixx

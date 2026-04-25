@@ -605,6 +605,42 @@ write "notes.txt", "Hello"
 append "notes.txt", " World"
 ```
 
+---
+
+### Shell bridge (v0.6.4)
+
+| Function | Arguments | Returns | Notes |
+|---|---|---|---|
+| `do(command)` | text | text | Runs an IXX shell command and returns its output as text |
+
+`do` runs the same commands available in the `ixx>` interactive shell and via
+`ixx do "..."`, and returns their output as a text value instead of printing it.
+
+```
+ram_info = do("ram used")
+say ram_info
+
+ip = do("wifi ip")
+say "Wi-Fi address: {ip}"
+
+cpu = do("cpu info")
+write "cpu-report.txt", cpu
+```
+
+**Error handling** — unknown commands, incomplete commands, and commands that
+fail at runtime all raise a runtime error, which means `try`/`catch` works:
+
+```
+try
+- result = do("bad command")
+catch
+- say "Command failed: {error}"
+```
+
+**Important:** `do` only runs IXX shell commands (the same set visible in
+`ixx help`). It does **not** execute raw PowerShell, CMD, or Bash commands.
+Raw native shell execution is a separate future feature.
+
 `read`, `readlines`, and `exists` are typically used in **expression position**:
 
 ```
@@ -842,4 +878,4 @@ catch
 
 ---
 
-*Dictionary current as of IXX v0.6.3.*
+*Dictionary current as of IXX v0.6.4.*

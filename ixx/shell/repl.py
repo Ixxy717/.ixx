@@ -335,3 +335,59 @@ def run_command_once(line: str) -> None:
         return
 
     _dispatch(registry, tokens)
+
+
+def run_command_capture(line: str) -> str:
+    """Run a shell command and return its output as a string instead of printing.
+
+    Used by the ``do()`` built-in.  Raises IXXRuntimeError for unknown,
+    incomplete, not-implemented, or erroring commands.
+    """
+    import io
+    import contextlib
+    from ..runtime.errors import IXXRuntimeError
+
+    registry = _make_registry()
+    tokens = apply_aliases(_normalize(_tokenize(line.strip())))
+
+    if not tokens:
+        raise IXXRuntimeError("do() received an empty command.")
+
+    result = get_guidance(registry, tokens)
+
+    if result.matched_node is None:
+        suggestions = registry.suggest(tokens[0])
+        hint = f"  Did you mean: {suggestions[0]}?" if suggestions else ""
+        raise IXXRuntimeError(
+            f"Unknown shell command: '{line}'.{hint}\n"
+            "  Run 'ixx help' to see available commands."
+        )
+
+    if not result.is_executable:
+        node = result.matched_node
+        example = node.examples[0] if node.examples else "see ixx help"
+        raise IXXRuntimeError(
+            f"'{line}' is an incomplete command.  Example: {example}"
+        )
+
+    node = result.matched_node
+
+    if result.remaining_args and node.subcommands:
+        unknown_sub = result.remaining_args[0]
+        raise IXXRuntimeError(
+            f"Unknown subcommand '{unknown_sub}' for '{tokens[0]}'.\n"
+            f"  Run 'ixx help {tokens[0]}' to see valid options."
+        )
+
+    if node.handler is None:
+        raise IXXRuntimeError(f"'{line}' is not yet implemented.")
+
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            node.handler(result.remaining_args)
+    except Exception as exc:
+        raise IXXRuntimeError(f"Shell command '{line}' failed: {exc}") from exc
+
+    return buf.getvalue().strip()
+

@@ -30,9 +30,10 @@ class IXXTransformer(Transformer):
 
     def assignment(self, items):
         name = str(items[0])
+        line = getattr(items[0], "line", None)
         exprs = list(items[1:])
         value = ListLit(items=exprs) if len(exprs) > 1 else exprs[0]
-        return Assign(name=name, value=value)
+        return Assign(name=name, value=value, line=line)
 
     def if_stmt(self, items):
         cond       = items[0]
@@ -49,8 +50,9 @@ class IXXTransformer(Transformer):
 
     def call_stmt(self, items):
         name = str(items[0])
+        line = getattr(items[0], "line", None)
         args = list(items[1:])
-        return CallStmt(name=name, args=args)
+        return CallStmt(name=name, args=args, line=line)
 
     def return_stmt(self, items):
         value = items[0] if items else None
@@ -58,6 +60,7 @@ class IXXTransformer(Transformer):
 
     def func_def(self, items):
         name = str(items[0])
+        line = getattr(items[0], "line", None)
         # items[1] is either func_params (list[str]) or a block (list[Stmt])
         # items[-1] is always the block
         if len(items) == 3:
@@ -66,7 +69,7 @@ class IXXTransformer(Transformer):
         else:
             params = []
             body   = items[1]
-        return FuncDef(name=name, params=params, body=body)
+        return FuncDef(name=name, params=params, body=body, line=line)
 
     def func_params(self, items):
         return [str(t) for t in items]
@@ -83,8 +86,9 @@ class IXXTransformer(Transformer):
 
     def call_expr(self, items):
         name = str(items[0])
+        line = getattr(items[0], "line", None)
         args = list(items[1:])
-        return CallExpr(name=name, args=args)
+        return CallExpr(name=name, args=args, line=line)
 
     # ── literals ───────────────────────────────────────────────────────────────
 
@@ -108,7 +112,8 @@ class IXXTransformer(Transformer):
         return NothingLit()
 
     def var_ref(self, items):
-        return VarRef(name=str(items[0]))
+        line = getattr(items[0], "line", None)
+        return VarRef(name=str(items[0]), line=line)
 
     # ── arithmetic ─────────────────────────────────────────────────────────────
 

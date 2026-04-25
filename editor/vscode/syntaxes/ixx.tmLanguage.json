@@ -73,7 +73,7 @@
       "patterns": [
         {
           "name": "support.function.builtin.ixx",
-          "match": "\\b(say|count|text|number|ask|type|upper|lower|trim|replace|split|join|round|abs|min|max|first|last|sort|reverse|color)\\b"
+          "match": "\\b(say|count|text|number|ask|type|upper|lower|trim|replace|split|join|round|abs|min|max|first|last|sort|reverse|color|do)\\b"
         }
       ]
     },

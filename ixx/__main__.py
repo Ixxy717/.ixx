@@ -5,12 +5,14 @@ Supported usage:
     ixx <file.ixx>            run a script (shorthand)
     ixx run <file.ixx>        run a script (explicit)
     ixx check <file.ixx>      parse only — report syntax errors, no execution
+    ixx check <file.ixx> --json   machine-readable JSON output
     ixx version               print the IXX version
     ixx help                  print help overview
     ixx shell                 open the interactive shell
 """
 
 from __future__ import annotations
+import json
 import sys
 import os
 import re
@@ -28,6 +30,7 @@ Usage:
   ixx <file.ixx>          run a script
   ixx run <file.ixx>      run a script (explicit)
   ixx check <file.ixx>    check syntax without running
+  ixx check <file.ixx> --json  check syntax, output machine-readable JSON
   ixx version             print the IXX version
   ixx help                show this help
   ixx                     open the IXX interactive shell
@@ -228,6 +231,14 @@ def _run_file(path: str, check_only: bool = False) -> None:
         sys.exit(1)
 
     if check_only:
+        from .checker import SemanticChecker
+        errors = SemanticChecker().check(program, path)
+        if errors:
+            print(f"ixx: check failed in {path}", file=sys.stderr)
+            for e in errors:
+                loc = f" (line {e.line})" if e.line else ""
+                print(f"  {e.message}{loc}", file=sys.stderr)
+            sys.exit(1)
         print(f"ixx: {path} - syntax OK")
         return
 
@@ -237,6 +248,59 @@ def _run_file(path: str, check_only: bool = False) -> None:
         from .shell.renderer import show_error
         show_error(f"runtime error in {path}\n  {e}")
         sys.exit(1)
+
+
+def _check_file_json(path: str) -> None:
+    """Run syntax + semantic check on *path* and emit a single JSON object to stdout.
+
+    Schema:
+        {"file": "<path>", "ok": true,  "errors": []}
+        {"file": "<path>", "ok": false, "errors": [
+            {"file": "...", "line": <int|null>, "column": <int|null>,
+             "severity": "error", "message": "<str>"}
+        ]}
+
+    Always exits 0 on success, 1 on error.  Never writes to stderr.
+    """
+    def _emit(ok: bool, errors: list) -> None:
+        print(json.dumps({"file": path, "ok": ok, "errors": errors}))
+
+    if not os.path.isfile(path):
+        _emit(False, [{"file": path, "line": None, "column": None,
+                       "severity": "error", "message": f"file not found: {path}"}])
+        sys.exit(1)
+
+    try:
+        with open(path, encoding="utf-8") as f:
+            source = f.read()
+    except OSError as e:
+        _emit(False, [{"file": path, "line": None, "column": None,
+                       "severity": "error", "message": f"cannot read file: {e}"}])
+        sys.exit(1)
+
+    from lark.exceptions import UnexpectedInput
+    from .parser import parse
+
+    try:
+        program = parse(source)
+    except UnexpectedInput as e:
+        line_num, orig_line, col = _orig_line_and_col(source, e)
+        msg = _friendly_message(orig_line or "", col, e)
+        _emit(False, [{"file": path, "line": line_num, "column": col,
+                       "severity": "error", "message": msg}])
+        sys.exit(1)
+    except Exception as e:
+        _emit(False, [{"file": path, "line": None, "column": None,
+                       "severity": "error", "message": str(e)}])
+        sys.exit(1)
+
+    from .checker import SemanticChecker
+    errors = SemanticChecker().check(program, path)
+    if errors:
+        _emit(False, [err.as_dict() for err in errors])
+        sys.exit(1)
+
+    _emit(True, [])
 
 
 def _first_run_setup() -> None:
@@ -340,13 +404,19 @@ def main() -> None:
             _uc_notify(VERSION)
         return
 
-    # --- ixx check <file> ---
+    # --- ixx check <file> [--json] ---
     if cmd == "check":
-        if len(args) < 2:
+        rest = args[1:]
+        use_json = "--json" in rest
+        file_args = [a for a in rest if a != "--json"]
+        if not file_args:
             print("ixx: 'check' requires a file path.  Example: ixx check hello.ixx",
                   file=sys.stderr)
             sys.exit(1)
-        _run_file(args[1], check_only=True)
+        if use_json:
+            _check_file_json(file_args[0])
+        else:
+            _run_file(file_args[0], check_only=True)
         if _check_updates:
             from .update_check import notify as _uc_notify
             _uc_notify(VERSION)

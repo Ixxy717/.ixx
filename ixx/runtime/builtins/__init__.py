@@ -8,6 +8,7 @@ from .math  import MATH_BUILTINS
 from .lists import LIST_BUILTINS
 from .files import FILE_BUILTINS
 from .color import COLOR_BUILTINS
+from .shell import SHELL_BUILTINS
 
 BUILT_INS: dict[str, object] = {
     **CORE_BUILTINS,
@@ -16,4 +17,5 @@ BUILT_INS: dict[str, object] = {
     **LIST_BUILTINS,
     **FILE_BUILTINS,
     **COLOR_BUILTINS,
+    **SHELL_BUILTINS,
 }

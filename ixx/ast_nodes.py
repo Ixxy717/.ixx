@@ -43,6 +43,7 @@ class ListLit:
 @dataclass
 class VarRef:
     name: str
+    line: int | None = None
 
 @dataclass
 class NegOp:
@@ -79,6 +80,7 @@ class CallExpr:
     """Expression-position function call: must use parentheses, e.g. add(5, 3)."""
     name: str
     args: list["Expr"]
+    line: int | None = None
 
 Expr = (
     IntLit | FloatLit | StrLit | BoolLit | NothingLit | ListLit | VarRef |
@@ -92,6 +94,7 @@ Expr = (
 class Assign:
     name: str
     value: Expr
+    line: int | None = None
 
 @dataclass
 class If:
@@ -113,6 +116,7 @@ class CallStmt:
     """Statement-position function call: space-separated args, e.g. greet "World"."""
     name: str
     args: list[Expr]
+    line: int | None = None
 
 @dataclass
 class ReturnStmt:
@@ -125,6 +129,7 @@ class FuncDef:
     name: str
     params: list[str]
     body: list["Stmt"]
+    line: int | None = None
 
 @dataclass
 class TryCatch:

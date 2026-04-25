@@ -4,6 +4,38 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.4.0] — `do()` built-in: script-to-shell command bridge
+
+### Added
+- **`do(command)` built-in** — run any IXX shell command from inside an `.ixx` script and get the output back as text:
+  ```
+  ram = do("ram used")
+  say ram
+
+  ip = do("wifi ip")
+  say "Wi-Fi IP: {ip}"
+
+  cpu = do("cpu info")
+  write "cpu-report.txt", cpu
+  ```
+- `do()` raises `IXXRuntimeError` on unknown commands, incomplete commands, not-yet-implemented commands, or commands that fail at runtime — so `try`/`catch` works:
+  ```
+  try
+  - info = do("bad command")
+  catch
+  - say "Command failed: {error}"
+  ```
+- `do()` added to `_BUILTIN_ARITY` in `checker.py` — `ixx check` flags wrong-arity calls statically
+- `do` added to VS Code extension syntax-highlighting keyword list; VSIX rebuilt (`0.6.0`)
+- `do(command)` documented in `spec/dictionary.md` (Shell bridge section)
+- `ixx/runtime/builtins/shell.py` — new module for shell-bridge built-ins
+
+### Technical
+- `run_command_capture(line)` added to `ixx/shell/repl.py`: runs the same tokenize → normalize → alias → guidance → dispatch pipeline as `run_command_once`, but captures handler `print()` output via `contextlib.redirect_stdout` and returns it as a string
+- No handler files modified; all existing `ixx do "..."` CLI behavior unchanged
+
+---
+
 ## [0.6.3.0] — interpreter refactored into `ixx/runtime/` package
 
 ### Changed

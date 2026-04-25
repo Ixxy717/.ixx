@@ -2,8 +2,8 @@
   "$schema": "https://raw.githubusercontent.com/microsoft/vscode/main/src/vs/vscode.d.ts",
   "name": "ixx-language",
   "displayName": "IXX Language",
-  "description": "Syntax highlighting for IXX (.ixx) source files. Registers .ixx as IXX, not C++.",
-  "version": "0.5.2",
+  "description": "IXX language support: syntax highlighting and live diagnostics for .ixx files.",
+  "version": "0.6.0",
   "publisher": "ixx",
   "license": "MIT",
   "engines": {
@@ -21,6 +21,20 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Ixxy717/.ixx"
+  },
+  "activationEvents": [
+    "onLanguage:ixx"
+  ],
+  "main": "./out/extension.js",
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.74.0",
+    "typescript": "^5.4.0"
   },
   "contributes": {
     "languages": [
@@ -46,6 +60,32 @@
         "scopeName": "source.ixx",
         "path": "./syntaxes/ixx.tmLanguage.json"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "IXX",
+      "properties": {
+        "ixx.diagnostics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable IXX live diagnostics (syntax + semantic checks)."
+        },
+        "ixx.diagnostics.onChange": {
+          "type": "boolean",
+          "default": true,
+          "description": "Re-run diagnostics as you type (debounced). Requires the file to be saved first."
+        },
+        "ixx.diagnostics.debounceMs": {
+          "type": "number",
+          "default": 500,
+          "minimum": 100,
+          "description": "Milliseconds to wait after the last keystroke before re-running diagnostics."
+        },
+        "ixx.diagnostics.command": {
+          "type": "string",
+          "default": "ixx",
+          "description": "Path to the IXX CLI executable. Defaults to 'ixx' (must be on PATH). Override if your install is not on PATH."
+        }
+      }
+    }
   }
 }
