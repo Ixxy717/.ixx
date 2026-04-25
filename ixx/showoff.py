@@ -130,6 +130,25 @@ def pause(seconds: float, *, plain: bool = False, quick: bool = False) -> None:
         _sleep(seconds * 0.30 if quick else seconds)
 
 
+def _wait(*, plain: bool = False, quick: bool = False) -> None:
+    """Subtle 'press enter to continue' — no-op when piped, plain, or quick."""
+    if plain or quick or not sys.stdout.isatty():
+        return
+    # Dim hint; erased after the user presses enter so it doesn't clutter output
+    if _ansi_ok():
+        print(f"  {_DIM}[enter]{_RESET}", end="  ", flush=True)
+    else:
+        print("  [enter]", end="  ", flush=True)
+    try:
+        input()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return
+    # Move up one line and erase it
+    if _ansi_ok():
+        print("\033[1A\033[2K", end="", flush=True)
+
+
 # ── Layout helpers ─────────────────────────────────────────────────────────────
 
 def _hr(label: str, *, plain: bool = False) -> None:
@@ -236,16 +255,15 @@ def _code_reveal(
     *,
     plain: bool = False,
     quick: bool = False,
+    wait: bool = False,
 ) -> None:
     """Show CODE block (plain text), pause, then reveal OUTPUT (green, animated)."""
-    d = 0.010 if quick else 0.022
-    p = 0.08  if quick else 0.26    # inter-line pause inside code block
+    d = 0.010 if quick else 0.030
+    p = 0.08  if quick else 0.28    # inter-line pause inside code block
 
     print(f"  {_c(_DIM, 'CODE', plain=plain)}")
     for line in code_lines:
         if line:
-            # Plain (neutral) color for code — not cyan, not colored
-            # so code reads clearly and OUTPUT pops in contrast
             type_line(f"    {line}", delay=d, plain=plain)
             pause(p, plain=plain)
         else:
@@ -259,7 +277,9 @@ def _code_reveal(
                   plain=plain)
         pause(0.10, plain=plain, quick=quick)
     print()
-    pause(0.12 if quick else 0.50, plain=plain)
+    pause(0.12 if quick else 0.45, plain=plain)
+    if wait:
+        _wait(plain=plain, quick=quick)
 
 
 # ── Sections ───────────────────────────────────────────────────────────────────
@@ -445,13 +465,16 @@ def _section_native_note(*, plain: bool = False) -> None:
         "Learn the clean IXX version when one exists.",
     ]
     for line in content:
-        print(f"  {line}" if line else "")
-        pause(0.14, plain=plain)
+        if line:
+            type_line(f"  {line}", delay=0.020, plain=plain)
+            pause(0.22, plain=plain)
+        else:
+            print()
     print()
     pause(0.50, plain=plain)
 
 
-def _section_interpolation(*, plain: bool = False, quick: bool = False) -> None:
+def _section_interpolation(*, plain: bool = False, quick: bool = False, wait: bool = False) -> None:
     _hr("VARIABLES + INTERPOLATION", plain=plain)
     _code_reveal(
         [
@@ -459,12 +482,12 @@ def _section_interpolation(*, plain: bool = False, quick: bool = False) -> None:
             'say "Hello, {name}"',
         ],
         ["Hello, Ixxy"],
-        plain=plain, quick=quick,
+        plain=plain, quick=quick, wait=wait,
     )
     pause(0.35, plain=plain, quick=quick)
 
 
-def _section_functions(*, plain: bool = False, quick: bool = False) -> None:
+def _section_functions(*, plain: bool = False, quick: bool = False, wait: bool = False) -> None:
     _hr("FUNCTIONS", plain=plain)
     _code_reveal(
         [
@@ -474,12 +497,12 @@ def _section_functions(*, plain: bool = False, quick: bool = False) -> None:
             "say double(21)",
         ],
         ["42"],
-        plain=plain, quick=quick,
+        plain=plain, quick=quick, wait=wait,
     )
     pause(0.35, plain=plain, quick=quick)
 
 
-def _section_builtins(*, plain: bool = False) -> None:
+def _section_builtins(*, plain: bool = False, wait: bool = False) -> None:
     _hr("BUILT-INS", plain=plain)
     _code_reveal(
         [
@@ -493,12 +516,12 @@ def _section_builtins(*, plain: bool = False) -> None:
             "apple | banana | cherry | grape",
             "3.14",
         ],
-        plain=plain,
+        plain=plain, wait=wait,
     )
     pause(0.35, plain=plain)
 
 
-def _section_files_errors(*, plain: bool = False) -> None:
+def _section_files_errors(*, plain: bool = False, wait: bool = False) -> None:
     _hr("FILES + ERRORS", plain=plain)
     _code_reveal(
         [
@@ -515,7 +538,7 @@ def _section_files_errors(*, plain: bool = False) -> None:
             "Hello, Ixxy",
             "Handled: [file not found: missing.txt]",
         ],
-        plain=plain,
+        plain=plain, wait=wait,
     )
     pause(0.35, plain=plain)
 
@@ -539,7 +562,7 @@ def _section_validation(*, plain: bool = False, quick: bool = False) -> None:
     pause(0.35, plain=plain, quick=quick)
 
 
-def _section_real_script(*, plain: bool = False) -> None:
+def _section_real_script(*, plain: bool = False, wait: bool = False) -> None:
     """A complete self-contained IXX script with output. (full mode only)"""
     _hr("A REAL SCRIPT", plain=plain)
 
@@ -566,8 +589,8 @@ def _section_real_script(*, plain: bool = False) -> None:
     ]
     for line in script:
         if line:
-            type_line(f"    {line}", delay=0.016, plain=plain)
-            pause(0.20, plain=plain)
+            type_line(f"    {line}", delay=0.028, plain=plain)
+            pause(0.22, plain=plain)
         else:
             print()
 
@@ -583,7 +606,9 @@ def _section_real_script(*, plain: bool = False) -> None:
         _type_col(_GREEN, f"    {line}", delay=0.016, plain=plain)
         pause(0.10, plain=plain)
     print()
-    pause(0.60, plain=plain)
+    pause(0.55, plain=plain)
+    if wait:
+        _wait(plain=plain)
 
 
 def _section_timeline(*, plain: bool = False) -> None:
@@ -597,8 +622,21 @@ def _section_timeline(*, plain: bool = False) -> None:
         ("v0.6", "file I/O + try/catch + nothing literal"),
     ]
     for ver, desc in milestones:
-        print(f"  {_c(_CYAN + _BOLD, ver, plain=plain)}  {desc}")
-        pause(0.22, plain=plain)
+        if not plain and sys.stdout.isatty():
+            # Print colored version tag, then type the description
+            if _ansi_ok():
+                sys.stdout.write(f"  {_CYAN}{_BOLD}{ver}{_RESET}  ")
+            else:
+                sys.stdout.write(f"  {ver}  ")
+            sys.stdout.flush()
+            for ch in desc:
+                sys.stdout.write(ch)
+                sys.stdout.flush()
+                _sleep(0.018)
+            sys.stdout.write("\n")
+        else:
+            print(f"  {_c(_CYAN + _BOLD, ver, plain=plain)}  {desc}")
+        pause(0.30, plain=plain)
     print()
     pause(0.50, plain=plain)
 
@@ -635,6 +673,7 @@ def run(mode: str = "default") -> None:
     plain = (mode == "plain")
     quick = (mode == "quick")
     full  = (mode == "full")
+    wait  = not quick and not plain   # enable [enter] prompts on real TTY
 
     _section_boot(plain=plain, quick=quick)
 
@@ -644,21 +683,21 @@ def run(mode: str = "default") -> None:
     _section_comparisons(plain=plain, quick=quick, full=full)
 
     if not quick:
-        _section_interpolation(plain=plain, quick=quick)
+        _section_interpolation(plain=plain, quick=quick, wait=wait)
 
-    _section_functions(plain=plain, quick=quick)
+    _section_functions(plain=plain, quick=quick, wait=wait)
 
     if not quick:
-        _section_files_errors(plain=plain)
+        _section_files_errors(plain=plain, wait=wait)
 
     if full:
-        _section_builtins(plain=plain)
+        _section_builtins(plain=plain, wait=wait)
         _section_native_note(plain=plain)
 
     _section_validation(plain=plain, quick=quick)
 
     if full:
-        _section_real_script(plain=plain)
+        _section_real_script(plain=plain, wait=wait)
         _section_timeline(plain=plain)
 
     _section_final(plain=plain, quick=quick)

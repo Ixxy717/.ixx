@@ -4,6 +4,19 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.2.5] — showoff: native/timeline animated, press-enter pacing, slower code
+
+### Fixed
+- **`_section_native_note`** was using bare `print()` on every line — now uses `type_line()` at 0.020s/char with 0.22s inter-line pause; no longer pops in
+- **`_section_timeline`** milestone lines were bare `print()` — now types the description char-by-char (0.018s/char) after printing the colored version tag
+- **Code typing delay** in `_code_reveal` increased 0.022 → 0.030s/char so code is actually readable during the reveal
+- **`_section_real_script`** code delay increased 0.016 → 0.028s/char for same reason
+
+### Added
+- **`_wait()` — lightweight press-enter prompt** after each code block in `default` and `full` modes: a dim `[enter]` appears at the left margin; pressing enter erases it and continues. Completely silent (no-op) when piped, in `plain` mode, or in `quick` mode — tests unaffected
+
+---
+
 ## [0.6.2.4] — showoff: all animations now consistent, less color fatigue
 
 ### Fixed
