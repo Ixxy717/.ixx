@@ -4,6 +4,23 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.4.2] — Fix: literal diagnostics no longer fire inside blocks
+
+### Fixed
+- `ixx check` literal built-in validation is now strictly top-level only.
+  Checks are suppressed inside function bodies, if/else blocks, loop bodies,
+  try blocks, and catch blocks — fixing false positives on all 40 positive
+  StressTest files (every test uses `number("ASSERT_FAIL")` inside a helper
+  function that only runs on assertion failure).
+- `read()` / `readlines()` literal path checks are also suppressed when any
+  `write()` or `append()` to the same literal path appears anywhere in the
+  program (the file may be created at runtime before the read).
+- JSON literal diagnostics continue to work correctly for all ExpectedFailures
+  files (`bad-color-name`, `bad-file-read`, `bad-number-conversion`,
+  `bad-do-empty`, `bad-do-nontext`).
+
+---
+
 ## [0.6.4.1] — Enhanced `ixx check` literal diagnostics for built-ins
 
 ### Added

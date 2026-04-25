@@ -10,7 +10,11 @@ Checks performed:
   2. Unknown function/built-in calls.
   3. Wrong argument count for built-in calls (where arg count is fixed).
   4. Simple undefined variable references (top-level only, conservative).
-  5. Literal value validation for specific built-ins (see _check_builtin_literals).
+  5. Literal value validation for specific built-ins — TOP LEVEL ONLY.
+     Literal checks are suppressed inside function bodies, if/else blocks,
+     loop bodies, try blocks, and catch blocks.
+     For read()/readlines() the check is also suppressed when any write() or
+     append() to the same literal path appears anywhere in the program.
 """
 
 from __future__ import annotations
@@ -113,6 +117,10 @@ class SemanticChecker:
         self._file = file_path
         self._errors: list[CheckError] = []
 
+        # _literal_depth tracks how deep inside any block we are.
+        # Literal built-in checks only fire when this is 0 (true top level).
+        self._literal_depth: int = 0
+
         # First pass: collect user-defined function signatures.
         self._func_table: dict[str, FuncDef] = {
             stmt.name: stmt
@@ -120,13 +128,18 @@ class SemanticChecker:
             if isinstance(stmt, FuncDef)
         }
 
-        # Second pass: collect every name ever assigned anywhere in the file
-        # (used for conservative undefined-variable detection at top level).
+        # Second pass: collect every name ever assigned anywhere in the file.
         self._all_assigned: set[str] = set()
         self._has_catch = False
         self._collect_names(program.body)
 
-        # Third pass: check all statements.
+        # Third pass: collect all literal file paths written/appended anywhere.
+        # Used to suppress false-positive read/readlines warnings when a script
+        # writes a file before reading it back.
+        self._written_paths: set[str] = set()
+        self._collect_written_paths(program.body)
+
+        # Fourth pass: check all statements.
         self._check_stmts(program.body, in_function=False)
 
         return self._errors
@@ -154,6 +167,36 @@ class SemanticChecker:
                     self._all_assigned.add("error")
                     self._collect_names(stmt.catch_body)
 
+    # ── written-paths collection pass ────────────────────────────────────────
+
+    def _collect_written_paths(self, stmts: list) -> None:
+        """Recursively gather all literal file paths passed to write/append."""
+        for stmt in stmts:
+            if isinstance(stmt, CallStmt):
+                if stmt.name in ("write", "append") and stmt.args:
+                    s = _lit_str(stmt.args[0])
+                    if s is not None:
+                        self._written_paths.add(s)
+            elif isinstance(stmt, Assign):
+                self._scan_expr_for_writes(stmt.value)
+            elif isinstance(stmt, FuncDef):
+                self._collect_written_paths(stmt.body)
+            elif isinstance(stmt, If):
+                self._collect_written_paths(stmt.then_body)
+                self._collect_written_paths(stmt.else_body)
+            elif isinstance(stmt, Loop):
+                self._collect_written_paths(stmt.body)
+            elif isinstance(stmt, TryCatch):
+                self._collect_written_paths(stmt.try_body)
+                self._collect_written_paths(stmt.catch_body)
+
+    def _scan_expr_for_writes(self, expr) -> None:
+        if isinstance(expr, CallExpr) and expr.name in ("write", "append"):
+            if expr.args:
+                s = _lit_str(expr.args[0])
+                if s is not None:
+                    self._written_paths.add(s)
+
     # ── statement walk ───────────────────────────────────────────────────────
 
     def _check_stmts(self, stmts: list, in_function: bool) -> None:
@@ -167,19 +210,27 @@ class SemanticChecker:
                 self._check_call(stmt.name, stmt.args, stmt.line, in_function)
             elif isinstance(stmt, If):
                 self._check_expr(stmt.condition, in_function)
+                self._literal_depth += 1
                 self._check_stmts(stmt.then_body, in_function)
                 self._check_stmts(stmt.else_body, in_function)
+                self._literal_depth -= 1
             elif isinstance(stmt, Loop):
                 self._check_expr(stmt.condition, in_function)
+                self._literal_depth += 1
                 self._check_stmts(stmt.body, in_function)
+                self._literal_depth -= 1
             elif isinstance(stmt, FuncDef):
+                self._literal_depth += 1
                 self._check_stmts(stmt.body, in_function=True)
+                self._literal_depth -= 1
             elif isinstance(stmt, ReturnStmt):
                 if stmt.value is not None:
                     self._check_expr(stmt.value, in_function)
             elif isinstance(stmt, TryCatch):
+                self._literal_depth += 1
                 self._check_stmts(stmt.try_body, in_function)
                 self._check_stmts(stmt.catch_body, in_function)
+                self._literal_depth -= 1
 
     # ── expression walk ──────────────────────────────────────────────────────
 
@@ -253,7 +304,7 @@ class SemanticChecker:
                     f"'{name}' expects {expected_str} argument(s), got {n}"
                 )
             else:
-                # Arity OK — run conservative literal-value checks.
+                # Arity OK — run conservative literal-value checks (top level only).
                 self._check_builtin_literals(name, args, line)
             return
 
@@ -268,11 +319,20 @@ class SemanticChecker:
     def _check_builtin_literals(
         self, name: str, args: list, line: int | None
     ) -> None:
-        """Conservative validation of literal arguments for specific built-ins.
+        """Conservative literal-argument validation for specific built-ins.
 
-        Only fires when the argument is a known literal (string, number, bool,
-        nothing).  If the argument is a variable or expression, skips silently.
+        Only fires when:
+          - _literal_depth == 0  (true top-level, not inside any block)
+          - The argument is a known literal (string, number, bool, nothing).
+
+        If the argument is a variable or expression, skips silently.
+        For read()/readlines(), also skips when the same literal path is written
+        anywhere in the program (the file may be created at runtime before the read).
         """
+        # Guard: only check at true top level.
+        if self._literal_depth > 0:
+            return
+
         if not args:
             return
 
@@ -292,7 +352,11 @@ class SemanticChecker:
         # ── read(path) / readlines(path) ──────────────────────────────────
         elif name in ("read", "readlines"):
             s = _lit_str(arg0)
-            if s is not None and not os.path.exists(s):
+            if (
+                s is not None
+                and s not in self._written_paths
+                and not os.path.exists(s)
+            ):
                 self._err(line, None, f"File not found: {s}")
 
         # ── first/last/sort/reverse — must be list ────────────────────────
