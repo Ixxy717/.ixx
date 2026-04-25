@@ -20,7 +20,8 @@ assignment: IDENTIFIER "=" expr ("," expr)*
 
 if_stmt: "if" expr _NEWLINE block ("else" _NEWLINE block)?
 
-loop_stmt: "loop" expr _NEWLINE block
+loop_stmt: "loop" expr _NEWLINE block                              -> loop_while
+         | "loop" _EACH_KW IDENTIFIER _IN_KW expr _NEWLINE block  -> loop_each
 
 say_stmt: "say" (expr ("," expr)*)?
 
@@ -101,6 +102,8 @@ _TRY_KW.2:      /try(?![A-Za-z0-9_])/
 _CATCH_KW.2:    /catch(?![A-Za-z0-9_])/
 _USE_KW.2:      /use(?![A-Za-z0-9_])/
 _STD_KW.2:      /std(?![A-Za-z0-9_])/
+_EACH_KW.2:     /each(?![A-Za-z0-9_])/
+_IN_KW.2:       /in(?![A-Za-z0-9_])/
 
 // YES / NO are case-insensitive boolean literals.
 // Negative lookahead ensures they don't match as prefixes of identifiers

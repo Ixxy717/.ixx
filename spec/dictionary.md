@@ -345,6 +345,50 @@ loop i less than count(items) and found is NO
 
 ---
 
+### loop each (list iteration)
+
+Iterates over every item in a list.
+
+```
+loop each name in list_expr
+- statement
+```
+
+- `list_expr` must evaluate to a list.  Passing text, a number, or any other type raises a runtime error.
+- The loop variable follows normal block scoping: it survives after the loop only if it was declared before the loop.
+
+Examples:
+
+```
+names = "Ixxy", "Lune", "Zach"
+
+loop each name in names
+- say "Hello, {name}!"
+```
+
+```
+numbers = 1, 2, 3, 4, 5
+total = 0
+
+loop each n in numbers
+- total = total + n
+
+say total
+```
+
+Nested:
+
+```
+rows = 1, 2, 3
+cols = 10, 100
+
+loop each r in rows
+- loop each c in cols
+-- say r * c
+```
+
+---
+
 ## 10. Functions
 
 ### Defining a function

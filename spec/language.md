@@ -167,6 +167,77 @@ loop count more than 0
 
 ---
 
+## loop each
+
+Iterates over every item in a list, running the body once per item.
+
+```
+loop each name in list_expression
+- statement
+- statement
+```
+
+- `name` is the loop variable.  It is assigned the current item at the start of each iteration.
+- `list_expression` must evaluate to a list at runtime.  If it evaluates to any other type, a runtime error is raised.
+- Scoping follows the same rule as all other blocks:
+  - If the loop variable was declared **before** the `loop each`, it is updated each iteration and the last value remains accessible after the loop.
+  - If the loop variable did **not** exist before the loop, it is local to the loop body and is not accessible after the loop.
+
+Example:
+
+```
+names = "Ixxy", "Lune", "Zach"
+
+loop each name in names
+- say "Hello, {name}!"
+```
+
+Summing a number list:
+
+```
+numbers = 1, 2, 3, 4, 5
+total = 0
+
+loop each n in numbers
+- total = total + n
+
+say "Total: {total}"
+```
+
+Nested loops:
+
+```
+rows = 1, 2, 3
+cols = 10, 100
+
+loop each r in rows
+- loop each c in cols
+-- say r * c
+```
+
+`loop each` inside a function, with early `return`:
+
+```
+function first_positive lst
+- loop each n in lst
+-- if n more than 0
+--- return n
+- return 0
+```
+
+Runtime error example — iterating over text raises:
+
+```
+loop each ch in "hello"
+- say ch
+```
+
+```
+Error: 'loop each' expects a list, got text.
+```
+
+---
+
 ## say
 
 Outputs values to the screen. Accepts one or more comma-separated expressions.
@@ -269,7 +340,7 @@ Variables created for the first time inside a block stay in that block.
 
 These words cannot be used as variable names:
 
-`if`, `else`, `loop`, `say`, `and`, `or`, `not`, `is`, `less`, `more`, `than`, `at`, `least`, `most`, `contains`, `YES`, `NO`, `nothing`, `function`, `return`, `try`, `catch`
+`if`, `else`, `loop`, `each`, `in`, `say`, `and`, `or`, `not`, `is`, `less`, `more`, `than`, `at`, `least`, `most`, `contains`, `YES`, `NO`, `nothing`, `function`, `return`, `try`, `catch`
 
 ---
 

@@ -228,6 +228,15 @@ Run-JsonCheck "json import missing file" "StressTest\CheckJson\bad-import-missin
 Run-JsonCheck "json import cycle" "StressTest\CheckJson\bad-import-cycle.ixx" $false "Circular"
 Run-JsonCheck "json import duplicate" "StressTest\CheckJson\bad-import-duplicate.ixx" $false "Duplicate"
 Run-JsonCheck "json import wrong arity" "StressTest\CheckJson\bad-import-wrong-arity.ixx" $false "expects 1"
+Run-JsonCheck "json import nested good" "StressTest\CheckJson\good-import-nested.ixx" $true
+Run-JsonCheck "json import stdlib date good" "StressTest\CheckJson\good-import-stdlib-date.ixx" $true
+Run-JsonCheck "json import long cycle" "StressTest\CheckJson\bad-import-long-cycle.ixx" $false "Circular"
+Run-JsonCheck "json import transitive duplicate" "StressTest\CheckJson\bad-import-transitive-duplicate.ixx" $false "Duplicate"
+Run-JsonCheck "json import local duplicate nested" "StressTest\CheckJson\bad-import-local-duplicate-nested.ixx" $false "Duplicate"
+Run-JsonCheck "json import stdlib wrong arity" "StressTest\CheckJson\bad-import-stdlib-wrong-arity.ixx" $false "expects 1"
+Run-JsonCheck "json good loop each" "StressTest\CheckJson\good-loop-each.ixx" $true
+Run-JsonCheck "json loop each text literal" "StressTest\CheckJson\bad-loop-each-text-literal.ixx" $false "expects a list"
+Run-JsonCheck "json loop each number literal" "StressTest\CheckJson\bad-loop-each-number-literal.ixx" $false "expects a list"
 
 Write-Host ""
 Write-Host "========================================"

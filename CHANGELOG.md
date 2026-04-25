@@ -4,6 +4,29 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.6] — 2026-04-25: IXX-native List Iteration
+
+### Added
+- **`loop each` construct** — `loop each <name> in <expr>` iterates over every item in a list.
+- **`LoopEach` AST node** — `var_name: str`, `iterable: Expr`, `body: list[Stmt]`, `line: int | None`.
+- **Grammar** — `loop_each` rule alongside `loop_while`; new `_EACH_KW` and `_IN_KW` terminals at priority 2 with negative lookaheads to avoid clashing with identifiers like `each_item`, `inside`, `input`.
+- **Transformer** — renamed existing `loop_stmt` method to `loop_while`; added `loop_each` method in `build_ast.py`.
+- **Interpreter** — `LoopEach` case in `_exec`: evaluates the iterable once, raises a friendly `IXXRuntimeError` if it is not a list, then runs the body once per item.
+- **Checker** — `loop each` is understood by `SemanticChecker`.  Conservative literal validation flags obvious non-list literals (`"text"`, numbers) at the top level only (not inside functions, try/catch, or other control-flow blocks).  Loop-variable scoping matches runtime: defined inside the body for all iterations; survives after the loop only if it was declared before the loop.
+- **Examples** — `examples/loop-each.ixx` demonstrates names, sums, text building, nested loops, early return from inside a loop, and try/catch inside a loop.
+- **StressTest positive tests** — `59-loop-each-basic.ixx`, `60-loop-each-nested.ixx`, `61-loop-each-in-function.ixx`, `62-loop-each-try-catch.ixx`, `63-loop-each-mixed.ixx`.
+- **StressTest ExpectedFailures** — `bad-loop-each-text.ixx`, `bad-loop-each-number.ixx`, `bad-loop-each-undefined-list.ixx`.
+- **StressTest CheckJson** — `good-loop-each.ixx`, `bad-loop-each-text-literal.ixx`, `bad-loop-each-number-literal.ixx`.
+- **Unit tests** — `TestLoopEach` class in `tests/test_ixx.py` (18 tests covering parse, AST, interpreter, scoping, runtime errors, checker, and JSON).
+- **Docs** — `spec/language.md` and `spec/dictionary.md` updated with `loop each` syntax, scoping rules, and examples.  Keywords list extended with `each` and `in`.
+
+### Notes
+- Existing while-style `loop <condition>` behavior is unchanged.
+- `loop each` does **not** add indexing, maps, filters, or dictionaries — those are future scope.
+- No new built-ins were added; iterating over a non-list still raises a descriptive runtime error.
+
+---
+
 ## [0.6.5] — 2026-04-25: Local Module Imports and Standard Library
 
 ### Added

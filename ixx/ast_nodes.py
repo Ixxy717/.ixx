@@ -108,6 +108,14 @@ class Loop:
     body: list["Stmt"]
 
 @dataclass
+class LoopEach:
+    """loop each <var_name> in <iterable> — list iteration."""
+    var_name: str
+    iterable: Expr
+    body: list["Stmt"]
+    line: int | None = None
+
+@dataclass
 class Say:
     args: list[Expr]
 
@@ -144,7 +152,7 @@ class UseStmt:
     path: str          # e.g. "helpers.ixx" or "time"
     line: int | None = None
 
-Stmt = Assign | If | Loop | Say | CallStmt | ReturnStmt | FuncDef | TryCatch | UseStmt
+Stmt = Assign | If | Loop | LoopEach | Say | CallStmt | ReturnStmt | FuncDef | TryCatch | UseStmt
 
 @dataclass
 class Program:

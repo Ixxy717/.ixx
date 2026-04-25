@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 import sys
 from .ast_nodes import (
-    Program, Assign, If, Loop, Say,
+    Program, Assign, If, Loop, LoopEach, Say,
     IntLit, FloatLit, StrLit, BoolLit, NothingLit, ListLit, VarRef,
     NegOp, BinOp, Compare, AndOp, OrOp, NotOp,
     CallExpr, CallStmt, ReturnStmt, FuncDef, TryCatch, UseStmt,
@@ -97,6 +97,18 @@ class Interpreter:
                             "  Tip: Make sure your loop condition eventually becomes NO."
                         )
                     self._exec_block(body, env.child())
+
+            case LoopEach(var_name=var_name, iterable=iterable_expr, body=body):
+                iterable = self._eval(iterable_expr, env)
+                if not isinstance(iterable, list):
+                    type_name = _ixx_type_name(iterable)
+                    raise IXXRuntimeError(
+                        f"'loop each' expects a list, got {type_name}."
+                    )
+                for item in iterable:
+                    iter_env = env.child()
+                    iter_env.set(var_name, item)
+                    self._exec_block(body, iter_env)
 
             case Say(args=args):
                 parts = [_display(self._eval(a, env)) for a in args]

@@ -11,6 +11,7 @@ Run with:
 from __future__ import annotations
 import contextlib
 import io
+import json
 import os
 import subprocess
 import sys
@@ -1119,6 +1120,177 @@ class TestDoBuiltin(unittest.TestCase):
         from ixx.interpreter import IXXRuntimeError
         with self.assertRaises(IXXRuntimeError):
             self._run("x = do(42)")
+
+
+# ── TestLoopEach ──────────────────────────────────────────────────────────────
+
+class TestLoopEach(unittest.TestCase):
+    """Tests for v0.6.6 loop each list iteration."""
+
+    def _run(self, source: str) -> str:
+        from ixx.parser import parse
+        from ixx.interpreter import Interpreter
+        buf = io.StringIO()
+        with unittest.mock.patch("builtins.print",
+                                 side_effect=lambda *a, **kw: buf.write(" ".join(str(x) for x in a) + "\n")):
+            Interpreter().run(parse(source))
+        return buf.getvalue()
+
+    def _check(self, source: str):
+        from ixx.parser import parse
+        from ixx.checker import SemanticChecker
+        return SemanticChecker().check(parse(source), "test.ixx")
+
+    # ── grammar / AST ─────────────────────────────────────────────────────────
+
+    def test_parse_loop_each(self):
+        from ixx.parser import parse
+        from ixx.ast_nodes import LoopEach
+        p = parse('items = "a", "b"\nloop each item in items\n- say item')
+        loop = p.body[1]
+        self.assertIsInstance(loop, LoopEach)
+        self.assertEqual(loop.var_name, "item")
+
+    def test_parse_loop_each_has_body(self):
+        from ixx.parser import parse
+        from ixx.ast_nodes import LoopEach, Say
+        p = parse('items = "a"\nloop each x in items\n- say x')
+        loop = p.body[1]
+        self.assertIsInstance(loop, LoopEach)
+        self.assertEqual(len(loop.body), 1)
+        self.assertIsInstance(loop.body[0], Say)
+
+    def test_while_loop_still_parses(self):
+        """Existing while-style loop must not be broken."""
+        from ixx.parser import parse
+        from ixx.ast_nodes import Loop
+        p = parse('n = 3\nloop n more than 0\n- n = n - 1')
+        self.assertIsInstance(p.body[1], Loop)
+
+    # ── interpreter ───────────────────────────────────────────────────────────
+
+    def test_sum_number_list(self):
+        out = self._run('nums = 1, 2, 3, 4, 5\ntotal = 0\nloop each n in nums\n- total = total + n\nsay total')
+        self.assertIn("15", out)
+
+    def test_build_text_from_word_list(self):
+        out = self._run('words = "a", "b", "c"\nr = ""\nloop each w in words\n- r = r + w\nsay r')
+        self.assertIn("abc", out)
+
+    def test_nested_loop_each(self):
+        src = 'r = 1, 2\nc = 10, 100\ntotal = 0\nloop each x in r\n- loop each y in c\n-- total = total + x * y\nsay total'
+        out = self._run(src)
+        self.assertIn("330", out)
+
+    def test_loop_each_inside_function(self):
+        src = 'function sum_list lst\n- total = 0\n- loop each n in lst\n-- total = total + n\n- return total\nnums = 4, 6\nsay sum_list(nums)'
+        out = self._run(src)
+        self.assertIn("10", out)
+
+    def test_return_from_inside_loop_each(self):
+        src = ('function first_positive lst\n'
+               '- loop each n in lst\n'
+               '-- if n more than 0\n'
+               '--- return n\n'
+               '- return 0\n'
+               'items = -2, -1, 5, 9\n'
+               'say first_positive(items)')
+        out = self._run(src)
+        self.assertIn("5", out)
+
+    def test_try_catch_inside_loop_each(self):
+        src = ('values = "1", "bad", "3"\n'
+               'total = 0\n'
+               'errors = 0\n'
+               'loop each v in values\n'
+               '- try\n'
+               '-- total = total + number(v)\n'
+               '- catch\n'
+               '-- errors = errors + 1\n'
+               'say total\n'
+               'say errors')
+        out = self._run(src)
+        self.assertIn("4", out)
+        self.assertIn("1", out)
+
+    # ── scoping ───────────────────────────────────────────────────────────────
+
+    def test_scoping_predeclared_survives(self):
+        """If the loop var existed before the loop, the last value survives after."""
+        src = 'items = "x", "y", "z"\ncurrent = ""\nloop each current in items\n- say current\nsay current'
+        out = self._run(src)
+        lines = [l.strip() for l in out.strip().splitlines() if l.strip()]
+        self.assertEqual(lines[-1], "z")
+
+    def test_scoping_new_var_does_not_leak(self):
+        """If the loop var did not exist before the loop, it is not accessible after."""
+        from ixx.interpreter import IXXRuntimeError
+        src = 'items = "a", "b"\nloop each newvar in items\n- say newvar\nsay newvar'
+        with self.assertRaises(IXXRuntimeError):
+            self._run(src)
+
+    # ── runtime error ─────────────────────────────────────────────────────────
+
+    def test_non_list_text_raises(self):
+        from ixx.interpreter import IXXRuntimeError
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            self._run('loop each ch in "hello"\n- say ch')
+        self.assertIn("expects a list", str(ctx.exception))
+
+    def test_non_list_number_raises(self):
+        from ixx.interpreter import IXXRuntimeError
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            self._run('loop each n in 42\n- say n')
+        self.assertIn("expects a list", str(ctx.exception))
+
+    def test_non_list_bool_raises(self):
+        from ixx.interpreter import IXXRuntimeError
+        with self.assertRaises(IXXRuntimeError):
+            self._run('loop each x in YES\n- say x')
+
+    # ── checker ───────────────────────────────────────────────────────────────
+
+    def test_checker_accepts_valid_loop_each(self):
+        errs = self._check('nums = 1, 2, 3\ntotal = 0\nloop each n in nums\n- total = total + n\nsay total')
+        self.assertEqual(errs, [])
+
+    def test_checker_var_defined_inside_body(self):
+        """Loop variable must not trigger unknown-var error inside the body."""
+        errs = self._check('items = "a", "b"\nloop each item in items\n- say item')
+        self.assertEqual(errs, [])
+
+    def test_checker_predeclared_var_survives(self):
+        """Predeclared loop var should not trigger error after the loop."""
+        errs = self._check('items = "a", "b"\ncurrent = ""\nloop each current in items\n- say current\nsay current')
+        self.assertFalse(any("current" in e.message and "not defined" in e.message for e in errs))
+
+    def test_checker_non_predeclared_var_leaks_caught(self):
+        """Using non-predeclared loop var after the loop should be flagged."""
+        errs = self._check('items = "a", "b"\nloop each item in items\n- say item\nsay item')
+        self.assertTrue(any("item" in e.message for e in errs))
+
+    def test_checker_literal_text_iterable(self):
+        """Top-level literal text iterable should be flagged."""
+        errs = self._check('loop each ch in "abc"\n- say ch')
+        self.assertTrue(any("expects a list" in e.message for e in errs))
+
+    def test_checker_literal_number_iterable(self):
+        """Top-level literal number iterable should be flagged."""
+        errs = self._check('loop each n in 42\n- say n')
+        self.assertTrue(any("expects a list" in e.message for e in errs))
+
+    def test_checker_list_literal_not_flagged(self):
+        """A variable holding a list (not a scalar literal) must NOT be flagged."""
+        errs = self._check('items = 1, 2, 3\nloop each x in items\n- say x')
+        self.assertFalse(any("expects a list" in e.message for e in errs))
+
+    def test_checker_json_text_literal(self):
+        """ixx check --json on literal text iterable returns ok false with message."""
+        code, out = cli("check", "StressTest/CheckJson/bad-loop-each-text-literal.ixx", "--json")
+        self.assertEqual(code, 1)
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        self.assertTrue(any("expects a list" in e["message"] for e in data["errors"]))
 
 
 # ── TestImports ───────────────────────────────────────────────────────────────

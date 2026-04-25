@@ -9,7 +9,7 @@ the parent method runs.
 from __future__ import annotations
 from lark import Transformer
 from .ast_nodes import (
-    Program, Assign, If, Loop, Say,
+    Program, Assign, If, Loop, LoopEach, Say,
     IntLit, FloatLit, StrLit, BoolLit, NothingLit, ListLit, VarRef,
     NegOp, BinOp, Compare, AndOp, OrOp, NotOp,
     CallExpr, CallStmt, ReturnStmt, FuncDef, TryCatch, UseStmt,
@@ -41,9 +41,15 @@ class IXXTransformer(Transformer):
         else_block = items[2] if len(items) > 2 else []
         return If(condition=cond, then_body=then_block, else_body=else_block)
 
-    def loop_stmt(self, items):
+    def loop_while(self, items):
         cond, body = items
         return Loop(condition=cond, body=body)
+
+    def loop_each(self, items):
+        # items: [IDENTIFIER_token, iterable_expr, body_list]
+        var_name = str(items[0])
+        line = getattr(items[0], "line", None)
+        return LoopEach(var_name=var_name, iterable=items[1], body=items[2], line=line)
 
     def say_stmt(self, items):
         return Say(args=list(items))

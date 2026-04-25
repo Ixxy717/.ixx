@@ -24,7 +24,7 @@ import os
 from dataclasses import dataclass
 
 from .ast_nodes import (
-    Program, Assign, If, Loop, Say,
+    Program, Assign, If, Loop, LoopEach, Say,
     CallExpr, CallStmt, FuncDef, ReturnStmt, TryCatch, UseStmt,
     VarRef, BinOp, NegOp, Compare, AndOp, OrOp, NotOp,
     ListLit, StrLit, IntLit, FloatLit, BoolLit, NothingLit,
@@ -173,6 +173,10 @@ class SemanticChecker:
                 self._collect_names(stmt.else_body)
             elif isinstance(stmt, Loop):
                 self._collect_names(stmt.body)
+            elif isinstance(stmt, LoopEach):
+                # Do NOT add var_name here — it only survives if predeclared before loop.
+                # Collect any names assigned inside the body (they may escape via scoping).
+                self._collect_names(stmt.body)
             elif isinstance(stmt, TryCatch):
                 self._collect_names(stmt.try_body)
                 if stmt.catch_body:
@@ -234,6 +238,23 @@ class SemanticChecker:
                 self._literal_depth += 1
                 self._check_stmts(stmt.body, in_function)
                 self._literal_depth -= 1
+            elif isinstance(stmt, LoopEach):
+                self._check_expr(stmt.iterable, in_function)
+                # Conservative literal check: only flag obvious non-list at top level.
+                if self._literal_depth == 0:
+                    t = _lit_type_name(stmt.iterable)
+                    if t is not None:
+                        self._err(stmt.line, None, f"'loop each' expects a list, got {t}.")
+                # Track whether the loop var was declared before this loop.
+                was_predeclared = stmt.var_name in self._all_assigned
+                # Temporarily add var_name so body checks treat it as defined.
+                self._all_assigned.add(stmt.var_name)
+                self._literal_depth += 1
+                self._check_stmts(stmt.body, in_function)
+                self._literal_depth -= 1
+                # If not predeclared, remove it — it doesn't leak past the loop.
+                if not was_predeclared:
+                    self._all_assigned.discard(stmt.var_name)
             elif isinstance(stmt, FuncDef):
                 self._literal_depth += 1
                 self._check_stmts(stmt.body, in_function=True)
