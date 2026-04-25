@@ -105,6 +105,11 @@ class Interpreter:
                     raise IXXRuntimeError(
                         f"'loop each' expects a list, got {type_name}."
                     )
+                # Scoping: iter_env is a child of the outer env.  iter_env.set()
+                # walks the parent chain — so if var_name already exists in an
+                # ancestor scope it gets updated there (and survives the loop),
+                # while a truly new name is created locally and discarded when
+                # iter_env goes out of scope.  This mirrors how regular blocks work.
                 for item in iterable:
                     iter_env = env.child()
                     iter_env.set(var_name, item)
@@ -135,7 +140,7 @@ class Interpreter:
             case TryCatch(try_body=try_body, catch_body=catch_body):
                 try:
                     self._exec_block(try_body, env.child())
-                except (IXXRuntimeError, OSError, IOError) as exc:
+                except (IXXRuntimeError, OSError, IOError, UnicodeDecodeError) as exc:
                     if catch_body:
                         catch_env = env.child()
                         catch_env.set("error", str(exc))
@@ -294,18 +299,43 @@ class Interpreter:
             case "+":
                 # String + anything = string concatenation
                 if isinstance(lv, str) or isinstance(rv, str):
+                    if lv is None or rv is None:
+                        raise IXXRuntimeError(
+                            "Cannot concatenate text with nothing. "
+                            "Use an if check or provide a default value."
+                        )
                     return _display(lv) + _display(rv)
-                return lv + rv          # type: ignore[operator]
+                try:
+                    return lv + rv          # type: ignore[operator]
+                except TypeError:
+                    raise IXXRuntimeError(
+                        f"Cannot use '+' with {_ixx_type_name(lv)} and {_ixx_type_name(rv)}."
+                    )
             case "-":
-                return lv - rv          # type: ignore[operator]
+                try:
+                    return lv - rv          # type: ignore[operator]
+                except TypeError:
+                    raise IXXRuntimeError(
+                        f"Cannot use '-' with {_ixx_type_name(lv)} and {_ixx_type_name(rv)}."
+                    )
             case "*":
-                return lv * rv          # type: ignore[operator]
+                try:
+                    return lv * rv          # type: ignore[operator]
+                except TypeError:
+                    raise IXXRuntimeError(
+                        f"Cannot use '*' with {_ixx_type_name(lv)} and {_ixx_type_name(rv)}."
+                    )
             case "/":
                 if rv == 0:
                     raise IXXRuntimeError(
                         "You tried to divide by zero — that's not possible."
                     )
-                result = lv / rv        # type: ignore[operator]
+                try:
+                    result = lv / rv        # type: ignore[operator]
+                except TypeError:
+                    raise IXXRuntimeError(
+                        f"Cannot use '/' with {_ixx_type_name(lv)} and {_ixx_type_name(rv)}."
+                    )
                 # Return int when both inputs are integers and result is whole
                 if (
                     isinstance(lv, int) and isinstance(rv, int)
@@ -334,11 +364,17 @@ class Interpreter:
                         "Cannot use YES/NO in numeric comparisons. "
                         "Use 'is' or 'is not' to compare booleans."
                     )
-                match op:
-                    case "less than": return a < b   # type: ignore[operator]
-                    case "more than": return a > b   # type: ignore[operator]
-                    case "at least":  return a >= b  # type: ignore[operator]
-                    case "at most":   return a <= b  # type: ignore[operator]
+                try:
+                    match op:
+                        case "less than": return a < b   # type: ignore[operator]
+                        case "more than": return a > b   # type: ignore[operator]
+                        case "at least":  return a >= b  # type: ignore[operator]
+                        case "at most":   return a <= b  # type: ignore[operator]
+                except TypeError:
+                    raise IXXRuntimeError(
+                        f"Cannot compare {_ixx_type_name(a)} and {_ixx_type_name(b)} "
+                        f"using '{op}'. Both values must be numbers or both must be text."
+                    )
             case "contains":
                 if isinstance(a, list):
                     # Warn if element types don't match

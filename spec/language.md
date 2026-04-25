@@ -51,6 +51,14 @@ Variable names are single words. Letters, numbers, and underscores are allowed. 
 | Boolean | `YES`, `NO` (case-insensitive)  |
 | List    | `"apple", "banana", "grape"`    |
 
+**Booleans cannot be concatenated with text directly.**  Use `text()` to convert first:
+
+```
+active = YES
+say "Active: " + text(active)   # correct
+say "Active: " + active          # error: cannot use YES/NO in arithmetic
+```
+
 ### String interpolation
 
 Use `{varname}` inside a string to insert a variable's value.
@@ -62,6 +70,26 @@ say "Hello, {name}"
 ```
 
 If the variable is not defined, `{?name}` is shown in the output and a warning is printed to stderr.
+
+**Only bare variable names work inside `{}`.**  Expressions like `{count(items)}` or `{a + b}` are not evaluated — they appear as literal text.  Assign the result to a variable first:
+
+```
+n = count(items)
+say "Total: {n}"   # correct
+say "Total: {count(items)}"   # wrong — prints literal "{count(items)}"
+```
+
+### String escape sequences
+
+IXX does **not** process escape sequences inside string literals.  `"\n"` is the two-character sequence `\` + `n`, not a real newline.  Likewise `"\t"` is `\` + `t`.
+
+To write multi-line files, make separate `write` / `append` calls for each line (each OS write adds a trailing newline).
+
+```
+write "log.txt", "Line 1"
+append "log.txt", "Line 2"
+# file contains two lines
+```
 
 ### Lists
 
@@ -390,6 +418,16 @@ greet "World"               # statement position — no parens needed
 countdown 5
 ```
 
+> **Parentheses trap:** Do **not** use parentheses when calling a function as a standalone statement.
+> `greet name, age` is correct; `greet(name, age)` is a syntax error for multi-argument calls.
+> Parentheses **are** required when the call is inside an expression:
+>
+> ```
+> result = greet(name, age)    # expression position — parens required
+> say greet(name, age)         # also expression position — parens required
+> greet name, age              # statement position — no parens
+> ```
+
 ### Scoping
 
 Functions have their own local scope. Local variables do not leak out to
@@ -540,6 +578,18 @@ Read and write files using the built-in functions below. Paths are relative to t
 | `exists(path)` | text | YES/NO | Check whether a file or folder exists |
 
 All five raise an `IXXRuntimeError` with a friendly message if the file cannot be read or written (file not found, permission denied, etc.).
+
+### List round-trip via files
+
+`write(path, mylist)` serialises the list using IXX display format: `"a, b, c"`.  Reading it back with `read()` returns that string, not a list.  To round-trip a list, serialise with `join` and deserialise with `split`:
+
+```
+items = "alpha", "beta", "gamma"
+write "data.txt", join(items, ",")          # writes "alpha,beta,gamma"
+back = split(read("data.txt"), ",")         # back is a list of 3 items
+```
+
+Note: because `"\n"` in IXX strings is a literal backslash + n (not a real newline), you cannot use `"\n"` as a line separator inside a string.  Use `write`/`append` one value per call to create genuinely multi-line files.
 
 `write` and `append` are called as statements with space-separated arguments:
 ```

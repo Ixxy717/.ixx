@@ -45,7 +45,10 @@ def _builtin_type(x: IXXValue) -> str:
 
 
 def _builtin_ask(prompt: IXXValue = "") -> str:
-    return input(str(prompt))
+    try:
+        return input(str(prompt))
+    except EOFError:
+        raise IXXRuntimeError("No input available (stdin is closed).")
 
 
 CORE_BUILTINS: dict[str, object] = {

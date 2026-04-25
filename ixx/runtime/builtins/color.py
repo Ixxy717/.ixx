@@ -7,7 +7,7 @@ import sys
 
 from ...ast_nodes import IXXValue
 from ..errors import IXXRuntimeError
-from ..values import ixx_type_name
+from ..values import display, ixx_type_name
 
 # Map of IXX color names to ANSI SGR codes
 _COLOR_CODES: dict[str, str] = {
@@ -65,7 +65,7 @@ def _builtin_color(color_name: IXXValue, text_val: IXXValue) -> str:
         raise IXXRuntimeError(
             f"Unknown color '{color_name}'.  Valid colors: {valid}."
         )
-    text_str = str(text_val) if text_val is not None else ""
+    text_str = display(text_val) if text_val is not None else ""
     if not _ansi_enabled():
         return text_str
     return f"{_COLOR_CODES[name]}{text_str}{_COLOR_RESET}"

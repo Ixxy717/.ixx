@@ -1,0 +1,62 @@
+# String concatenation chain 50+ operations deep
+
+s = "start"
+s = s + "-01"
+s = s + "-02"
+s = s + "-03"
+s = s + "-04"
+s = s + "-05"
+s = s + "-06"
+s = s + "-07"
+s = s + "-08"
+s = s + "-09"
+s = s + "-10"
+s = s + "-11"
+s = s + "-12"
+s = s + "-13"
+s = s + "-14"
+s = s + "-15"
+s = s + "-16"
+s = s + "-17"
+s = s + "-18"
+s = s + "-19"
+s = s + "-20"
+s = s + "-21"
+s = s + "-22"
+s = s + "-23"
+s = s + "-24"
+s = s + "-25"
+s = s + "-26"
+s = s + "-27"
+s = s + "-28"
+s = s + "-29"
+s = s + "-30"
+s = s + "-31"
+s = s + "-32"
+s = s + "-33"
+s = s + "-34"
+s = s + "-35"
+s = s + "-36"
+s = s + "-37"
+s = s + "-38"
+s = s + "-39"
+s = s + "-40"
+s = s + "-41"
+s = s + "-42"
+s = s + "-43"
+s = s + "-44"
+s = s + "-45"
+s = s + "-46"
+s = s + "-47"
+s = s + "-48"
+s = s + "-49"
+s = s + "-50"
+
+say "Length: " + count(s)
+say "Contains 'start': " + text(s contains "start")
+say "Contains '-50': "   + text(s contains "-50")
+say "Contains '-25': "   + text(s contains "-25")
+
+expected_parts = 51
+actual_parts = count(split(s, "-"))
+say "Parts when split by '-': " + actual_parts

@@ -1488,6 +1488,267 @@ class TestImports(unittest.TestCase):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# TestEdgeCases — v0.6.7 bug & edge case coverage
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestEdgeCases(unittest.TestCase):
+    """Covers every bug and edge case fixed / documented in v0.6.7."""
+
+    # ── color() bool/nothing ───────────────────────────────────────────────────
+
+    def test_color_bool_yes(self):
+        """color() with YES must show 'YES', not Python 'True'."""
+        src = 'say color("bold", YES)'
+        output = run(src)
+        self.assertIn("YES", output)
+        self.assertNotIn("True", output)
+
+    def test_color_bool_no(self):
+        """color() with NO must show 'NO', not Python 'False'."""
+        src = 'say color("bold", NO)'
+        output = run(src)
+        self.assertIn("NO", output)
+        self.assertNotIn("False", output)
+
+    def test_color_nothing(self):
+        """color() with nothing must return empty string (no crash)."""
+        src = 'x = color("red", nothing)\nsay count(x)'
+        output = run(src)
+        self.assertEqual(output, "0")
+
+    # ── _eval_binop TypeError wraps ───────────────────────────────────────────
+
+    def test_binop_list_minus_number(self):
+        """list - number must raise IXXRuntimeError, not Python crash."""
+        src = 'x = 1, 2, 3\ny = x - 1\nsay y'
+        with self.assertRaises(IXXRuntimeError):
+            run(src)
+
+    def test_binop_nothing_plus_number(self):
+        """nothing + number must raise IXXRuntimeError."""
+        src = 'x = nothing\ny = x + 1\nsay y'
+        with self.assertRaises(IXXRuntimeError):
+            run(src)
+
+    # ── text + nothing → error (bug 2a) ──────────────────────────────────────
+
+    def test_text_plus_nothing_raises(self):
+        """'text' + nothing must raise IXXRuntimeError, not produce 'textnothing'."""
+        src = 'x = "hello" + nothing\nsay x'
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run(src)
+        self.assertIn("nothing", str(ctx.exception).lower())
+
+    def test_nothing_plus_text_raises(self):
+        """nothing + 'text' must also raise IXXRuntimeError."""
+        src = 'x = nothing + "world"\nsay x'
+        with self.assertRaises(IXXRuntimeError):
+            run(src)
+
+    # ── _eval_compare TypeError wrap (bug 3) ─────────────────────────────────
+
+    def test_compare_text_vs_number_less_than(self):
+        """'abc' less than 1 must raise IXXRuntimeError, not crash with Python TypeError."""
+        src = 'if "abc" less than 1\n- say "should not reach"'
+        with self.assertRaises(IXXRuntimeError):
+            run(src)
+
+    def test_compare_text_vs_number_more_than(self):
+        src = 'if "abc" more than 1\n- say "bad"'
+        with self.assertRaises(IXXRuntimeError):
+            run(src)
+
+    def test_compare_try_catch_wraps_compare_error(self):
+        """After the fix, try/catch should intercept comparison type errors."""
+        src = textwrap.dedent("""\
+            try
+            - x = "abc" more than 1
+            catch
+            - say "caught"
+        """)
+        output = run(src)
+        self.assertEqual(output, "caught")
+
+    # ── min/max already wrapped (bug 4 — confirmed NOT a bug) ─────────────────
+
+    def test_min_mixed_types_caught(self):
+        """min(1, 'a') error must be catchable via try/catch."""
+        src = textwrap.dedent("""\
+            try
+            - x = min(1, "a")
+            catch
+            - say "caught"
+        """)
+        output = run(src)
+        self.assertEqual(output, "caught")
+
+    # ── ask() EOFError wrap (bug 6) ───────────────────────────────────────────
+
+    def test_ask_eoferror_raises_ixx(self):
+        """ask() on closed stdin must raise IXXRuntimeError, not crash."""
+        with unittest.mock.patch("builtins.input", side_effect=EOFError):
+            with self.assertRaises(IXXRuntimeError) as ctx:
+                run('x = ask("?")\nsay x')
+        self.assertIn("stdin", str(ctx.exception).lower())
+
+    # ── UnicodeDecodeError caught by try/catch (bug 5) ───────────────────────
+
+    def test_unicode_decode_caught(self):
+        """UnicodeDecodeError from reading a binary file must be caught by try/catch."""
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".bin") as f:
+            f.write(b"\xff\xfe\x00bad")
+            path = f.name
+        try:
+            src = textwrap.dedent(f"""\
+                try
+                - content = read("{path}")
+                catch
+                - say "caught"
+            """)
+            output = run(src)
+            self.assertEqual(output, "caught")
+        finally:
+            os.unlink(path)
+
+    # ── first/last on empty list ──────────────────────────────────────────────
+
+    def test_first_empty_list(self):
+        """first() on an empty list must return nothing."""
+        src = 'items = 1, 2, 3\nsay type(first(items))'
+        output = run(src)
+        self.assertIn("number", output)
+
+    def test_last_empty_list(self):
+        """last() on a nonempty list returns the last element."""
+        src = 'items = 10, 20, 30\nsay last(items)'
+        output = run(src)
+        self.assertEqual(output, "30")
+
+    # ── number() edge cases ───────────────────────────────────────────────────
+
+    def test_number_float_string(self):
+        """number('1.0') must return 1.0 (float)."""
+        src = 'say number("1.0")'
+        output = run(src)
+        self.assertEqual(output, "1.0")
+
+    def test_number_bool_raises(self):
+        """number(YES) must raise IXXRuntimeError."""
+        src = 'say number(YES)'
+        with self.assertRaises(IXXRuntimeError):
+            run(src)
+
+    def test_number_nothing_raises(self):
+        """number(nothing) must raise IXXRuntimeError (can't convert 'nothing')."""
+        src = 'say number(nothing)'
+        with self.assertRaises(IXXRuntimeError):
+            run(src)
+
+    # ── say with no args ──────────────────────────────────────────────────────
+
+    def test_say_no_args(self):
+        """say with no arguments must print a blank line."""
+        src = 'say'
+        output = run(src)
+        self.assertEqual(output, "")
+
+    # ── division behaviour ────────────────────────────────────────────────────
+
+    def test_division_integer_result(self):
+        """10 / 2 must return int 5, not float 5.0."""
+        src = 'say type(10 / 2)'
+        output = run(src)
+        self.assertEqual(output, "number")
+
+    def test_division_float_result(self):
+        """10 / 3 must return a float."""
+        src = 'say 10 / 3'
+        output = run(src)
+        self.assertIn(".", output)
+
+    # ── contains with number in string ───────────────────────────────────────
+
+    def test_contains_number_in_string(self):
+        """'abc' contains 97 must be NO (97 is not '97'... actually str(97)='97' not in 'abc')."""
+        src = 'say "abc" contains 97'
+        output = run(src)
+        self.assertEqual(output, "NO")
+
+    # ── replace coerces replacement to str ───────────────────────────────────
+
+    def test_replace_number_replacement(self):
+        """replace('abc', 'b', 42) must produce 'a42c'."""
+        src = 'say replace("abc", "b", 42)'
+        output = run(src)
+        self.assertEqual(output, "a42c")
+
+    # ── checker: LoopEach write inside loop, read at top-level ───────────────
+
+    def test_checker_loop_each_write_then_read(self):
+        """A write() inside loop each must not cause a false 'file not found' for a subsequent read()."""
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as f:
+            path = f.name
+        os.unlink(path)
+        from ixx.checker import SemanticChecker
+        src = textwrap.dedent(f"""\
+            items = "a", "b"
+            loop each item in items
+            - write "{path}", item
+            content = read("{path}")
+            say content
+        """)
+        prog = parse(src)
+        errors = SemanticChecker().check(prog, "<test>")
+        hard_errors = [e for e in errors if e.severity == "error"]
+        self.assertEqual(hard_errors, [], msg=f"Unexpected errors: {hard_errors}")
+
+    # ── checker: interpolation expression warning ─────────────────────────────
+
+    def test_checker_interpolation_expression_warn(self):
+        """say '{count(items)}' must produce a warning about non-interpolatable expression."""
+        from ixx.checker import SemanticChecker
+        src = 'items = 1, 2, 3\nsay "Total: {count(items)}"'
+        prog = parse(src)
+        errors = SemanticChecker().check(prog, "<test>")
+        warnings = [e for e in errors if e.severity == "warning"]
+        self.assertTrue(
+            any("count(items)" in e.message or "interpolat" in e.message for e in warnings),
+            msg=f"Expected interpolation warning, got: {warnings}"
+        )
+
+    def test_checker_interpolation_warn_does_not_fail_check(self):
+        """Interpolation warnings must not cause ok: false in JSON output."""
+        import json, tempfile, os
+        src = 'items = 1, 2, 3\nsay "Total: {count(items)}"\n'
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".ixx", delete=False, encoding="utf-8") as f:
+            f.write(src)
+            path = f.name
+        try:
+            rc, out = cli("check", path, "--json")
+            data = json.loads(out)
+            self.assertTrue(data["ok"], msg=f"Expected ok: true, got: {out}")
+        finally:
+            os.unlink(path)
+
+    # ── REPL heuristic recognises new IXX keywords ───────────────────────────
+
+    def test_repl_ixx_starters_contains_function(self):
+        """The REPL ixx_starters set must contain 'function'."""
+        import ast as _ast, inspect
+        from ixx.shell import repl
+        src = inspect.getsource(repl._try_run_ixx)
+        self.assertIn("function", src)
+
+    def test_repl_ixx_starters_contains_try(self):
+        from ixx.shell import repl
+        import inspect
+        src = inspect.getsource(repl._try_run_ixx)
+        self.assertIn('"try"', src)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

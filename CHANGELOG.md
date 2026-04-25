@@ -4,6 +4,37 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.7] — 2026-04-25: Bug & Edge Case Audit
+
+### Fixed
+
+- **`color()` with bool value** — `color("red", YES)` now renders `"YES"` instead of Python `"True"`. The `display()` helper from `values.py` is now used instead of `str()`.
+- **`_eval_binop` unhandled `TypeError`** — operations like `list - 1`, `nothing + 1` now raise a friendly `IXXRuntimeError` instead of a raw Python traceback. The `-`, `*`, `/`, and `+` (non-string) branches are all wrapped.
+- **`"text" + nothing` silent coercion** — `"hello" + nothing` previously produced `"hellonothing"`. It now raises `IXXRuntimeError: Cannot concatenate text with nothing.`
+- **`_eval_compare` unhandled `TypeError`** — `"abc" more than 1` now raises a friendly `IXXRuntimeError` and is catchable by `try/catch`. Previously it leaked a raw Python `TypeError` traceback.
+- **`try/catch` misses `UnicodeDecodeError`** — reading a binary file inside `try/catch` now correctly catches the error. `UnicodeDecodeError` was added to the caught-exceptions tuple.
+- **`ask()` EOFError on piped stdin** — `ask()` on closed/piped stdin now raises a friendly `IXXRuntimeError("No input available (stdin is closed).")` instead of crashing.
+- **Checker: `LoopEach` missing from `_collect_written_paths`** — a `write()` call inside `loop each` now correctly registers the path, preventing a false "File not found" error for a subsequent top-level `read()`.
+- **Checker: dead `_has_catch` field removed** — `self._has_catch` was assigned but never read; the field and both assignments are removed.
+- **REPL IXX-detection heuristic** — `function`, `try`, `use`, `return`, `catch` added to the set of keywords that trigger IXX syntax-error reporting in the REPL instead of "unknown command".
+
+### Added
+
+- **Checker: interpolation expression warning** — string literals containing `{expr(...)}` or `{a + b}` patterns (expressions that cannot be interpolated) now produce a `"warning"` severity `CheckError`. `ok: true` is preserved in `--json` output — only hard errors cause `ok: false`. A `_warn()` helper was added to `SemanticChecker`.
+- **LoopEach scoping comment** — an explanatory comment in `interpreter.py` documents the `iter_env.set()` parent-chain walk that implements the "predeclared variable survives / new variable does not leak" scoping rule.
+- **StressTest positive tests** — `69-edge-arith.ixx`, `70-edge-compare.ixx`, `71-edge-builtins-type-coerce.ixx`, `72-edge-list-ops.ixx`, `73-edge-try-catch-coverage.ixx`.
+- **StressTest ExpectedFailures** — `bad-arith-list-minus.ixx`, `bad-arith-nothing-plus.ixx`, `bad-arith-text-plus-nothing.ixx`, `bad-compare-text-number.ixx`, `bad-min-mixed.ixx`.
+- **Unit tests** — `TestEdgeCases` class in `tests/test_ixx.py` (30+ tests covering all fixed bugs, edge cases, and documented behaviours).
+- **Docs** — `spec/language.md` updated with: `\n` is literal, expression interpolation warning, bool-in-string-concat requires `text()`, `call_stmt` parentheses trap, and list round-trip via `join`/`split`.
+- **StressTest/RealWorld/** — 53 real-world scenario and torture test files; 52 pass, 1 intentional bug probe (`53-bug-compare-mismatch.ixx`, now fixed).
+
+### Notes
+
+- `min`/`max` mixed-type `TypeError` was previously listed as a bug; confirmed it was already wrapped by `_call()` in the interpreter. No change needed.
+- `StressTest/RealWorld/53-bug-compare-mismatch.ixx` (the one previously failing intentionally) now passes after the `_eval_compare` TypeError fix.
+
+---
+
 ## [0.6.6.1] — 2026-04-25: REPL Empty-Enter Fix
 
 ### Fixed

@@ -21,6 +21,7 @@ Checks performed:
 
 from __future__ import annotations
 import os
+import re
 from dataclasses import dataclass
 
 from .ast_nodes import (
@@ -145,7 +146,6 @@ class SemanticChecker:
 
         # Second pass: collect every name ever assigned anywhere in the file.
         self._all_assigned: set[str] = set()
-        self._has_catch = False
         self._collect_names(program.body)
 
         # Third pass: collect all literal file paths written/appended anywhere.
@@ -180,7 +180,6 @@ class SemanticChecker:
             elif isinstance(stmt, TryCatch):
                 self._collect_names(stmt.try_body)
                 if stmt.catch_body:
-                    self._has_catch = True
                     self._all_assigned.add("error")
                     self._collect_names(stmt.catch_body)
             # UseStmt: no names to collect
@@ -203,6 +202,8 @@ class SemanticChecker:
                 self._collect_written_paths(stmt.then_body)
                 self._collect_written_paths(stmt.else_body)
             elif isinstance(stmt, Loop):
+                self._collect_written_paths(stmt.body)
+            elif isinstance(stmt, LoopEach):
                 self._collect_written_paths(stmt.body)
             elif isinstance(stmt, TryCatch):
                 self._collect_written_paths(stmt.try_body)
@@ -271,8 +272,26 @@ class SemanticChecker:
 
     # ── expression walk ──────────────────────────────────────────────────────
 
+    # Matches {content} blocks — used to find non-identifier interpolation attempts.
+    _INTERP_BLOCK = re.compile(r'\{([^}]*)\}')
+    # A bare identifier looks exactly like this.
+    _BARE_IDENT = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+    # Content that signals an expression was attempted (not just a typo).
+    _EXPR_CHARS = re.compile(r'[()+ \-*/]')
+
     def _check_expr(self, expr, in_function: bool) -> None:
-        if isinstance(expr, VarRef):
+        if isinstance(expr, StrLit):
+            # Warn about {expr(...)} or {a + b} patterns that will not be interpolated.
+            # This warning fires at all depths — it's equally likely inside functions.
+            for m in self._INTERP_BLOCK.finditer(expr.value):
+                content = m.group(1)
+                if not self._BARE_IDENT.match(content) and self._EXPR_CHARS.search(content):
+                    self._warn(
+                        getattr(expr, "line", None), None,
+                        f"'{{{{ {content} }}}}' in string will not be interpolated — "
+                        "only bare variable names like {name} are supported."
+                    )
+        elif isinstance(expr, VarRef):
             if not in_function:
                 name = expr.name
                 if (
@@ -432,11 +451,14 @@ class SemanticChecker:
 
     # ── error helper ─────────────────────────────────────────────────────────
 
-    def _err(self, line: int | None, column: int | None, message: str) -> None:
+    def _err(self, line: int | None, column: int | None, message: str, severity: str = "error") -> None:
         self._errors.append(CheckError(
             file=self._file,
             line=line,
             column=column,
-            severity="error",
+            severity=severity,
             message=message,
         ))
+
+    def _warn(self, line: int | None, column: int | None, message: str) -> None:
+        self._err(line, column, message, severity="warning")

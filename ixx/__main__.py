@@ -247,12 +247,17 @@ def _run_file(path: str, check_only: bool = False) -> None:
     if check_only:
         from .checker import SemanticChecker
         errors = SemanticChecker().check(program, path, imported_funcs)
-        if errors:
+        hard_errors = [e for e in errors if e.severity == "error"]
+        if hard_errors:
             print(f"ixx: check failed in {path}", file=sys.stderr)
-            for e in errors:
+            for e in hard_errors:
                 loc = f" (line {e.line})" if e.line else ""
                 print(f"  {e.message}{loc}", file=sys.stderr)
             sys.exit(1)
+        for e in errors:
+            if e.severity == "warning":
+                loc = f" (line {e.line})" if e.line else ""
+                print(f"  warning: {e.message}{loc}", file=sys.stderr)
         print(f"ixx: {path} - syntax OK")
         return
 
@@ -319,11 +324,13 @@ def _check_file_json(path: str) -> None:
 
     from .checker import SemanticChecker
     errors = SemanticChecker().check(program, path, imported_funcs)
-    if errors:
+    hard_errors = [e for e in errors if e.severity == "error"]
+    if hard_errors:
         _emit(False, [err.as_dict() for err in errors])
         sys.exit(1)
 
-    _emit(True, [])
+    # Only warnings (or no issues) — ok: true but still include warnings in output.
+    _emit(True, [err.as_dict() for err in errors])
 
 
 def _first_run_setup() -> None:

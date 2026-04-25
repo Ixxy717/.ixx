@@ -183,6 +183,7 @@ def _try_run_ixx(first_line: str, prompt_fn) -> bool:
             # token looks like IXX syntax, not a shell command typo.
             ixx_starters = {
                 "say", "if", "else", "loop", "not",
+                "function", "try", "use", "return", "catch",
             }
             first_token = first_line.strip().split()[0].lower() if first_line.strip() else ""
             is_assignment = "=" in first_line and not first_line.strip().startswith("#")
