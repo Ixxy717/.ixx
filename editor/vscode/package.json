@@ -3,7 +3,7 @@
   "name": "ixx-language",
   "displayName": "IXX Language",
   "description": "IXX language support: syntax highlighting and live diagnostics for .ixx files.",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "publisher": "ixx",
   "license": "MIT",
   "engines": {

@@ -648,6 +648,237 @@ class TestCLI(unittest.TestCase):
 
 # ══════════════════════════════════════════════════════════════════════════════
 
+class TestCheckerLiteralValidation(unittest.TestCase):
+    """Tests for conservative literal-value checks in ixx check / ixx check --json."""
+
+    # ── helpers ───────────────────────────────────────────────────────────────
+
+    def _check(self, code: str, *extra_flags: str):
+        """Write *code* to a temp file, run ixx check, return (exit_code, output)."""
+        import tempfile, os as _os
+        with tempfile.NamedTemporaryFile(suffix=".ixx", mode="w",
+                                         encoding="utf-8", delete=False) as f:
+            f.write(code)
+            tmp = f.name
+        try:
+            return cli("check", tmp, *extra_flags)
+        finally:
+            _os.unlink(tmp)
+
+    def _json_check(self, code: str):
+        """Run ixx check --json; return (exit_code, parsed_dict)."""
+        import json
+        code_val, out = self._check(code, "--json")
+        return code_val, json.loads(out)
+
+    # ── color ─────────────────────────────────────────────────────────────────
+
+    def test_color_invalid_literal_human(self):
+        """check catches an invalid literal color name."""
+        code, out = self._check('x = color("purple", "hello")\n')
+        self.assertNotEqual(code, 0)
+        self.assertIn("check failed", out)
+        self.assertIn("purple", out)
+
+    def test_color_invalid_literal_json(self):
+        """--json reports invalid literal color name."""
+        import json
+        code, out = self._check('x = color("purple", "hello")\n', "--json")
+        self.assertNotEqual(code, 0)
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        msg = data["errors"][0]["message"]
+        self.assertIn("purple", msg)
+        self.assertIn("Valid colors", msg)
+
+    def test_color_valid_literal_passes(self):
+        """check does NOT flag a known color name."""
+        code, out = self._check('x = color("cyan", "hello")\n')
+        self.assertEqual(code, 0)
+
+    def test_color_bad_in_stresstest(self):
+        """The StressTest bad-color-name.ixx is caught by check."""
+        code, out = cli("check", "StressTest/ExpectedFailures/bad-color-name.ixx")
+        self.assertNotEqual(code, 0)
+        self.assertIn("check failed", out)
+
+    # ── read / readlines ──────────────────────────────────────────────────────
+
+    def test_read_missing_literal_file(self):
+        """check catches read() on a non-existent literal path."""
+        code, out = self._check(
+            'content = read("definitely-not-a-real-path-xyz123.txt")\n'
+        )
+        self.assertNotEqual(code, 0)
+        self.assertIn("check failed", out)
+        self.assertIn("not found", out.lower())
+
+    def test_read_missing_json(self):
+        """--json reports missing literal file for read()."""
+        import json
+        code, out = self._check(
+            'content = read("definitely-not-a-real-path-xyz123.txt")\n',
+            "--json",
+        )
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        self.assertIn("not found", data["errors"][0]["message"].lower())
+
+    def test_readlines_missing_literal_file(self):
+        """check catches readlines() on a non-existent literal path."""
+        code, out = self._check(
+            'lines = readlines("definitely-not-a-real-path-xyz123.txt")\n'
+        )
+        self.assertNotEqual(code, 0)
+        self.assertIn("File not found", out)
+
+    def test_read_bad_in_stresstest(self):
+        """The StressTest bad-file-read.ixx is caught by check."""
+        code, out = cli("check", "StressTest/ExpectedFailures/bad-file-read.ixx")
+        self.assertNotEqual(code, 0)
+        self.assertIn("check failed", out)
+
+    # ── first / sort ──────────────────────────────────────────────────────────
+
+    def test_first_with_text_literal(self):
+        """check flags first() called on a text literal."""
+        code, out = self._check('x = first("abc")\n')
+        self.assertNotEqual(code, 0)
+        self.assertIn("first", out)
+        self.assertIn("text", out)
+
+    def test_first_with_text_json(self):
+        """--json reports first() on text literal."""
+        import json
+        code, out = self._check('x = first("abc")\n', "--json")
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        msg = data["errors"][0]["message"]
+        self.assertIn("first", msg)
+
+    def test_sort_with_text_literal(self):
+        """check flags sort() called on a text literal."""
+        code, out = self._check('x = sort("abc")\n')
+        self.assertNotEqual(code, 0)
+        self.assertIn("sort", out)
+
+    def test_last_with_number_literal(self):
+        """check flags last() called on a number literal."""
+        code, out = self._check('x = last(123)\n')
+        self.assertNotEqual(code, 0)
+        self.assertIn("last", out)
+
+    def test_reverse_with_number_literal(self):
+        """check flags reverse() called on a number literal."""
+        code, out = self._check('x = reverse(123)\n')
+        self.assertNotEqual(code, 0)
+        self.assertIn("reverse", out)
+
+    def test_first_with_list_literal_passes(self):
+        """check does NOT flag first() called on a list variable."""
+        code, out = self._check('items = "a", "b"\nx = first(items)\n')
+        self.assertEqual(code, 0)
+
+    # ── count ─────────────────────────────────────────────────────────────────
+
+    def test_count_with_number_literal(self):
+        """check flags count() called on a number literal."""
+        code, out = self._check('x = count(42)\n')
+        self.assertNotEqual(code, 0)
+        self.assertIn("count", out)
+        self.assertIn("number", out)
+
+    def test_count_with_number_json(self):
+        """--json reports count() on number literal."""
+        import json
+        code, out = self._check('x = count(42)\n', "--json")
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        msg = data["errors"][0]["message"]
+        self.assertIn("count", msg)
+        self.assertIn("number", msg)
+
+    def test_count_with_text_passes(self):
+        """check does NOT flag count() called on a text literal."""
+        code, out = self._check('x = count("hello")\n')
+        self.assertEqual(code, 0)
+
+    # ── number ────────────────────────────────────────────────────────────────
+
+    def test_number_invalid_string_literal(self):
+        """check flags number() called on a non-numeric string literal."""
+        code, out = self._check('x = number("abc")\n')
+        self.assertNotEqual(code, 0)
+        self.assertIn("Cannot convert", out)
+        self.assertIn("abc", out)
+
+    def test_number_invalid_json(self):
+        """--json reports number() on un-convertible string literal."""
+        import json
+        code, out = self._check('x = number("abc")\n', "--json")
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        msg = data["errors"][0]["message"]
+        self.assertIn("abc", msg)
+
+    def test_number_valid_string_passes(self):
+        """check does NOT flag number() on a valid numeric string literal."""
+        code, out = self._check('x = number("42")\n')
+        self.assertEqual(code, 0)
+
+    def test_number_valid_float_passes(self):
+        """check does NOT flag number() on a valid float string literal."""
+        code, out = self._check('x = number("3.14")\n')
+        self.assertEqual(code, 0)
+
+    # ── do ────────────────────────────────────────────────────────────────────
+
+    def test_do_empty_string(self):
+        """check flags do() called with an empty string literal."""
+        code, out = self._check('x = do("")\n')
+        self.assertNotEqual(code, 0)
+        self.assertIn("empty", out.lower())
+
+    def test_do_empty_string_json(self):
+        """--json reports do() called with empty string."""
+        import json
+        code, out = self._check('x = do("")\n', "--json")
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        msg = data["errors"][0]["message"]
+        self.assertIn("empty", msg.lower())
+
+    def test_do_nontext_number(self):
+        """check flags do() called with a number literal."""
+        code, out = self._check('x = do(42)\n')
+        self.assertNotEqual(code, 0)
+        self.assertIn("text", out.lower())
+
+    def test_do_nontext_json(self):
+        """--json reports do() called with a non-text literal."""
+        import json
+        code, out = self._check('x = do(42)\n', "--json")
+        data = json.loads(out)
+        self.assertFalse(data["ok"])
+        msg = data["errors"][0]["message"]
+        self.assertIn("text", msg.lower())
+
+    def test_do_valid_string_passes(self):
+        """check does NOT flag do() with a non-empty text literal."""
+        code, out = self._check('x = do("ram used")\n')
+        self.assertEqual(code, 0)
+
+    def test_do_bad_in_stresstest_empty(self):
+        """The StressTest bad-do-empty.ixx is caught by check."""
+        code, out = cli("check", "StressTest/ExpectedFailures/bad-do-empty.ixx")
+        self.assertNotEqual(code, 0)
+
+    def test_do_bad_in_stresstest_nontext(self):
+        """The StressTest bad-do-nontext.ixx is caught by check."""
+        code, out = cli("check", "StressTest/ExpectedFailures/bad-do-nontext.ixx")
+        self.assertNotEqual(code, 0)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 
 class TestShowoff(unittest.TestCase):

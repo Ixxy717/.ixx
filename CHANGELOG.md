@@ -4,6 +4,22 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.4.1] — Enhanced `ixx check` literal diagnostics for built-ins
+
+### Added
+- **`ixx check` now catches obvious built-in misuse statically** when arguments are literals:
+  - `color("purple", ...)` → unknown color name flagged (valid: bold, cyan, dim, green, red, yellow)
+  - `read("missing.txt")` / `readlines("missing.txt")` → non-existent literal file path flagged
+  - `first("abc")`, `last(123)`, `sort("abc")`, `reverse(123)` → scalar literals flagged (must be list)
+  - `count(42)` → number/bool/nothing literal flagged (must be list or text)
+  - `number("abc")` → un-convertible string literal flagged
+  - `do("")` → empty command flagged; `do(42)` → non-text literal flagged
+- All checks are conservative — only fire on literal arguments, never on variables or expressions.
+- The VS Code/Cursor extension automatically benefits (already consumes `ixx check --json`).
+- 28 new unit tests for literal validation across all checked built-ins.
+
+---
+
 ## [0.6.4.0] — `do()` built-in: script-to-shell command bridge
 
 ### Added

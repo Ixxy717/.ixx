@@ -218,6 +218,11 @@ Run-JsonCheck "json wrong user arg count" "StressTest\CheckJson\bad-wrong-arg-co
 Run-JsonCheck "json unknown function" "StressTest\CheckJson\bad-unknown-function.ixx" $false "missingfunction"
 Run-JsonCheck "json undefined variable" "StressTest\CheckJson\bad-undefined-variable.ixx" $false "ghost"
 Run-JsonCheck "json builtin arity" "StressTest\CheckJson\bad-builtin-arity.ixx" $false "do"
+Run-JsonCheck "json invalid color literal" "StressTest\ExpectedFailures\bad-color-name.ixx" $false "Unknown color"
+Run-JsonCheck "json missing read literal" "StressTest\ExpectedFailures\bad-file-read.ixx" $false "File not found"
+Run-JsonCheck "json invalid number literal" "StressTest\ExpectedFailures\bad-number-conversion.ixx" $false "Cannot convert"
+Run-JsonCheck "json empty do literal" "StressTest\ExpectedFailures\bad-do-empty.ixx" $false "empty command"
+Run-JsonCheck "json nontext do literal" "StressTest\ExpectedFailures\bad-do-nontext.ixx" $false "expects a shell command"
 
 Write-Host ""
 Write-Host "========================================"
