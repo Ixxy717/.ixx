@@ -282,8 +282,6 @@ def run() -> None:
 
         line = raw.strip()
         if not line:
-            # Empty Enter — show top-level commands as a nudge
-            show_top_level(registry)
             continue
 
         tokens = apply_aliases(_normalize(_tokenize(line)))

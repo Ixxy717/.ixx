@@ -4,6 +4,13 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.6.1] — 2026-04-25: REPL Empty-Enter Fix
+
+### Fixed
+- Pressing Enter on an empty line in the IXX terminal no longer dumps the full help menu. It now behaves like PowerShell and CMD — the prompt simply advances to the next line.
+
+---
+
 ## [0.6.6] — 2026-04-25: IXX-native List Iteration
 
 ### Added

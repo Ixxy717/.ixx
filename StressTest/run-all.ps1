@@ -237,6 +237,7 @@ Run-JsonCheck "json import stdlib wrong arity" "StressTest\CheckJson\bad-import-
 Run-JsonCheck "json good loop each" "StressTest\CheckJson\good-loop-each.ixx" $true
 Run-JsonCheck "json loop each text literal" "StressTest\CheckJson\bad-loop-each-text-literal.ixx" $false "expects a list"
 Run-JsonCheck "json loop each number literal" "StressTest\CheckJson\bad-loop-each-number-literal.ixx" $false "expects a list"
+Run-JsonCheck "json loop each leak after loop" "StressTest\CheckJson\bad-loop-each-leak-after-loop.ixx" $false "item"
 
 Write-Host ""
 Write-Host "========================================"
