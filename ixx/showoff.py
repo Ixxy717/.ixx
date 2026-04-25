@@ -23,6 +23,8 @@ import time
 import shutil
 from typing import Optional
 
+from ._version import VERSION
+
 
 # ── ANSI constants ─────────────────────────────────────────────────────────────
 
@@ -209,10 +211,12 @@ def _comparison(
     old_lines: list[str],
     ixx_lines: list[str],
     ixx_output: Optional[list[str]] = None,
+    purpose: str = "",
     *,
     plain: bool = False,
     quick: bool = False,
     planned: bool = False,
+    wait: bool = False,
 ) -> None:
     """
     Print one OLD WAY → IXX WAY comparison block.
@@ -220,6 +224,11 @@ def _comparison(
     """
     d_old = 0.006 if quick else 0.010   # fast -- feels messy
     d_ixx = 0.012 if quick else 0.028   # slow -- feels deliberate
+
+    # ── purpose tag ────────────────────────────────────────────────────────────
+    if purpose:
+        type_line(f"  {purpose}", delay=0.018, plain=plain)
+        pause(0.30, plain=plain, quick=quick)
 
     # ── OLD WAY ────────────────────────────────────────────────────────────────
     print(f"  {_c(_DIM, f'OLD WAY: {old_label}', plain=plain)}")
@@ -246,7 +255,10 @@ def _comparison(
     pause(0.55, plain=plain, quick=quick)
     _divider(plain=plain)
     print()
-    pause(0.30, plain=plain, quick=quick)
+    if wait:
+        _wait(plain=plain, quick=quick)
+    else:
+        pause(0.30, plain=plain, quick=quick)
 
 
 def _code_reveal(
@@ -261,7 +273,7 @@ def _code_reveal(
     d = 0.010 if quick else 0.030
     p = 0.08  if quick else 0.28    # inter-line pause inside code block
 
-    print(f"  {_c(_DIM, 'CODE', plain=plain)}")
+    print(f"  {_c(_CYAN, 'CODE', plain=plain)}")
     for line in code_lines:
         if line:
             type_line(f"    {line}", delay=d, plain=plain)
@@ -285,52 +297,75 @@ def _code_reveal(
 # ── Sections ───────────────────────────────────────────────────────────────────
 
 def _section_boot(*, plain: bool = False, quick: bool = False) -> None:
-    _hr("BOOT", plain=plain)
+    uni = _unicode_ok() and not plain
+    hdr = "\u2550\u2550" if uni else "=="   # ══
 
-    d    = 0.012 if quick else 0.022
-    msgs = ["> booting IXX...", "> ready."] if quick else [
-        "> booting IXX...",
-        "> loading readable syntax...",
-        "> removing symbolic soup...",
-        "> translating computer nonsense...",
-        "> ready.",
-    ]
-    for msg in msgs:
-        _type_col(_DIM, f"  {msg}", delay=d, plain=plain)
-        pause(0.15 if quick else 0.45, plain=plain)
+    # Header
+    _hr("IXX SHOWOFF", plain=plain)
+    pause(0.20 if quick else 0.40, plain=plain)
 
-    pause(0.30 if quick else 0.55, plain=plain)
-    print()
+    if quick:
+        # Quick mode: just the tagline
+        _type_col(_BOLD + _CYAN, f"  IXX  {VERSION}", delay=0.06, plain=plain)
+        pause(0.20, plain=plain)
+        type_line("  Readable scripting for real terminal work.", delay=0.015, plain=plain)
+        pause(0.30, plain=plain)
+    else:
+        # Animated status lines: label   ready (green)
+        statuses = [
+            ("runtime  ", "ready"),
+            ("syntax   ", "ready"),
+            ("shell    ", "ready"),
+            ("examples ", "ready"),
+        ]
+        for label, status in statuses:
+            if not plain and sys.stdout.isatty():
+                # Type the label, stay on same line, pause, then type status in green
+                for ch in f"  {label}":
+                    sys.stdout.write(ch)
+                    sys.stdout.flush()
+                    _sleep(0.018)
+                pause(0.12, plain=plain)
+                if _ansi_ok():
+                    sys.stdout.write(_GREEN)
+                for ch in f"  {status}":
+                    sys.stdout.write(ch)
+                    sys.stdout.flush()
+                    _sleep(0.022)
+                if _ansi_ok():
+                    sys.stdout.write(_RESET)
+                sys.stdout.write("\n")
+            else:
+                print(f"  {label}  {_c(_GREEN, status, plain=plain)}")
+            pause(0.35, plain=plain)
 
-    _type_col(_BOLD + _CYAN, "  IXX", delay=0.06 if quick else 0.10, plain=plain)
-    pause(0.10 if quick else 0.22, plain=plain)
-    type_line("  The language for the user.", delay=0.015 if quick else 0.022, plain=plain)
-    pause(0.08 if quick else 0.15, plain=plain)
-    type_line("  The computer, translated.", delay=0.015 if quick else 0.022, plain=plain)
-    pause(0.30 if quick else 0.65, plain=plain)
+        pause(0.50, plain=plain)
+        print()
+        _type_col(_BOLD + _CYAN, f"  IXX  {VERSION}", delay=0.10, plain=plain)
+        pause(0.22, plain=plain)
+        type_line("  Readable scripting for real terminal work.", delay=0.022, plain=plain)
+        pause(0.65, plain=plain)
 
 
 def _section_slogans(*, plain: bool = False) -> None:
     """Personality lines shown in full mode before comparisons."""
     slogans = [
-        "No braces.",
-        "No semicolons.",
-        "No guessing what -gt means.",
-        "Just instructions.",
+        "Readable when you write it.",
+        "Readable when you come back later.",
+        "Useful from the first command.",
     ]
     print()
     for s in slogans:
-        _type_col(_BOLD, f"  {s}", delay=0.030, plain=plain)
-        pause(0.45, plain=plain)
-    pause(0.30, plain=plain)
-    type_line("  The terminal starts speaking human.", delay=0.020, plain=plain)
-    pause(0.70, plain=plain)
+        _type_col(_BOLD, f"  {s}", delay=0.028, plain=plain)
+        pause(0.50, plain=plain)
+    pause(0.65, plain=plain)
 
 
 def _section_comparisons(*,
                           plain: bool = False,
                           quick: bool = False,
-                          full: bool = False) -> None:
+                          full: bool = False,
+                          wait: bool = False) -> None:
     """
     OLD WAY → IXX WAY comparison panels.
     quick  : 1 comparison  (wifi ip)
@@ -341,6 +376,7 @@ def _section_comparisons(*,
 
     # Combined shell commands shown in default mode
     shell_combined = dict(
+        purpose="Three system questions, three long commands.",
         old_label="PowerShell",
         old_lines=[
             "Get-NetIPAddress ... | Where-Object {$_.InterfaceAlias -match 'Wi-Fi'} | ...",
@@ -361,6 +397,7 @@ def _section_comparisons(*,
 
     # Individual shell commands used in full mode
     shell_wifi = dict(
+        purpose="Get your wifi IP address.",
         old_label="PowerShell",
         old_lines=[
             "Get-NetIPAddress -AddressFamily IPv4 |",
@@ -371,6 +408,7 @@ def _section_comparisons(*,
         ixx_output=["192.168.1.104"],
     )
     shell_ram = dict(
+        purpose="Check how much RAM is in use.",
         old_label="PowerShell",
         old_lines=[
             "Get-CimInstance Win32_OperatingSystem |",
@@ -380,6 +418,7 @@ def _section_comparisons(*,
         ixx_output=["Used:  15.2 GB"],
     )
     shell_cpu = dict(
+        purpose="Read your processor name and core count.",
         old_label="PowerShell",
         old_lines=[
             "Get-CimInstance Win32_Processor |",
@@ -389,6 +428,7 @@ def _section_comparisons(*,
         ixx_output=["Intel Core i9 / 14 cores / 28 threads"],
     )
     code_file = dict(
+        purpose="Read a text file into a variable.",
         old_label="Python",
         old_lines=[
             'with open("notes.txt", "r", encoding="utf-8") as f:',
@@ -401,6 +441,7 @@ def _section_comparisons(*,
         ],
     )
     code_ifelse = dict(
+        purpose="Branch on a value with readable conditions.",
         old_label="C-like / JavaScript",
         old_lines=[
             "if (score > 90) {",
@@ -417,6 +458,7 @@ def _section_comparisons(*,
         ],
     )
     code_try = dict(
+        purpose="Handle a file that might not exist.",
         old_label="Python",
         old_lines=[
             "try:",
@@ -445,15 +487,15 @@ def _section_comparisons(*,
     _hr(f"OLD WAY  {arrow}  IXX WAY", plain=plain)
 
     for comp in chosen:
-        _comparison(**comp, plain=plain, quick=quick)
+        _comparison(**comp, plain=plain, quick=quick, wait=wait)
 
 
 def _section_native_note(*, plain: bool = False) -> None:
     """IXX does not replace what you already know. (full mode only)"""
     _hr("NATIVE COMMANDS", plain=plain)
     content = [
-        "IXX does not replace what you already know.",
-        "It gives you a home base.",
+        "IXX is not trying to hide the system.",
+        "It gives common work a cleaner front door.",
         "",
         "KNOWN COMMAND:",
         "  powershell -ExecutionPolicy Bypass -File setup.ps1",
@@ -566,7 +608,7 @@ def _section_real_script(*, plain: bool = False, wait: bool = False) -> None:
     """A complete self-contained IXX script with output. (full mode only)"""
     _hr("A REAL SCRIPT", plain=plain)
 
-    print(f"  {_c(_DIM, 'CODE', plain=plain)}")
+    print(f"  {_c(_CYAN, 'CODE', plain=plain)}")
     script = [
         'name = "Ixxy"',
         "score = 95",
@@ -647,19 +689,20 @@ def _section_final(*, plain: bool = False, quick: bool = False) -> None:
     _type_col(_BOLD + _CYAN, "  IXX", delay=0.06 if quick else 0.10, plain=plain)
     pause(0.12 if quick else 0.22, plain=plain)
     type_line("  The language for the user.", delay=0.015 if quick else 0.022, plain=plain)
-    pause(0.08 if quick else 0.15, plain=plain)
-    type_line("  The computer, translated.", delay=0.015 if quick else 0.022, plain=plain)
-    pause(0.20 if quick else 0.65, plain=plain)
+    pause(0.20 if quick else 0.55, plain=plain)
     print()
 
     if not quick:
-        for s in ["No braces.", "No semicolons.", "No -gt.", "Just instructions."]:
-            _type_col(_BOLD, f"  {s}", delay=0.028, plain=plain)
+        for s in [
+            "Readable scripts.",
+            "Practical commands.",
+            "Built to stay understandable.",
+        ]:
+            _type_col(_BOLD, f"  {s}", delay=0.026, plain=plain)
             pause(0.30, plain=plain)
         print()
 
-    print(f"  {_c(_DIM, 'pip install ixx', plain=plain)}  -  "
-          f"{_c(_DIM, 'ixx showoff', plain=plain)}")
+    print(f"  {_c(_DIM, 'pip install ixx', plain=plain)}")
     print()
 
 
@@ -680,7 +723,7 @@ def run(mode: str = "default") -> None:
     if full:
         _section_slogans(plain=plain)
 
-    _section_comparisons(plain=plain, quick=quick, full=full)
+    _section_comparisons(plain=plain, quick=quick, full=full, wait=wait)
 
     if not quick:
         _section_interpolation(plain=plain, quick=quick, wait=wait)

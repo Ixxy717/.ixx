@@ -4,6 +4,24 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.2.6] — showoff: new boot/final/slogan text, purpose tags, [enter] on comparisons
+
+### Changed
+- **Boot section** completely rewritten: was `> booting IXX...` loading messages + taglines; now shows `══ IXX SHOWOFF ══` header followed by animated status readouts (`runtime  ready`, `syntax  ready`, `shell  ready`, `examples  ready`) in green, then `IXX {version}` + `"Readable scripting for real terminal work."`
+- **Slogan block** (full mode): was "No braces. No semicolons..." — now `"Readable when you write it."` / `"Readable when you come back later."` / `"Useful from the first command."`
+- **Native commands intro**: was "IXX does not replace what you already know. / It gives you a home base." — now `"IXX is not trying to hide the system."` / `"It gives common work a cleaner front door."`
+- **Final screen**: removed "The computer, translated." and slogan list; now `IXX` / `The language for the user.` / `Readable scripts.` / `Practical commands.` / `Built to stay understandable.` / `pip install ixx`
+
+### Added
+- **Purpose tag** above each OLD WAY block: one short line (≤10 words) describing the goal of the comparison, e.g. `"Get your wifi IP address."`, `"Read a text file into a variable."`
+- **`[enter]` prompt after every comparison block** (`_comparison()`) — same treatment as code blocks; no-op when piped/quick/plain
+
+### Fixed
+- Removed orphaned dead-code block that had somehow been placed after `if __name__ == "__main__":` in `tests/test_ixx.py`
+- `_code_reveal` loop body was missing its `for` statement after the `CODE` label edit — restored
+
+---
+
 ## [0.6.2.5] — showoff: native/timeline animated, press-enter pacing, slower code
 
 ### Fixed

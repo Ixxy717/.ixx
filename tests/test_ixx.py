@@ -629,10 +629,10 @@ class TestShowoff(unittest.TestCase):
         self.assertIn("The language for the user", self._plain_out())
 
     def test_output_contains_final_line(self):
-        self.assertIn("The computer, translated", self._plain_out())
+        self.assertIn("pip install ixx", self._plain_out())
 
     def test_output_contains_boot_header(self):
-        self.assertIn("BOOT", self._plain_out())
+        self.assertIn("IXX SHOWOFF", self._plain_out())
 
     def test_output_contains_validation_header(self):
         self.assertIn("VALIDATION", self._plain_out())
@@ -653,14 +653,14 @@ class TestShowoff(unittest.TestCase):
         self.assertIn("IXX", out)
         self.assertIn("OLD WAY", out)
         self.assertIn("IXX WAY", out)
-        self.assertIn("BOOT", out)
+        self.assertIn("IXX SHOWOFF", out)
 
     def test_quick_mode_is_short(self):
         out = self._run_in_process("quick")
         self.assertIn("IXX", out)
         self.assertIn("wifi ip", out)
-        # slogans ("No braces") should NOT appear in quick mode
-        self.assertNotIn("No braces", out)
+        # slogans only appear in full mode
+        self.assertNotIn("Readable when you write it", out)
 
     def test_full_mode_includes_all_sections(self):
         out = self._run_in_process("full")
@@ -668,8 +668,8 @@ class TestShowoff(unittest.TestCase):
         self.assertIn("BUILT-INS", out)
         self.assertIn("NATIVE COMMANDS", out)
         self.assertIn("A REAL SCRIPT", out)
-        self.assertIn("No braces", out)          # slogans in full mode
-        self.assertIn("The computer, translated", out)
+        self.assertIn("Readable when you write it", out)   # slogans in full mode
+        self.assertIn("pip install ixx", out)
 
     def test_full_mode_has_all_comparisons(self):
         out = self._run_in_process("full")
@@ -706,136 +706,6 @@ class TestShowoff(unittest.TestCase):
             [sys.executable, "-m", "ixx", "showoff", "plain"],
             capture_output=True, text=True, encoding="utf-8",
             errors="replace", timeout=20, env=env,
-        )
-        self.assertEqual(r.returncode, 0)
-        self.assertNotIn("\033[", r.stdout)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
-
-    def _run_in_process(self, mode: str) -> str:
-        """Run showoff in-process with _sleep mocked out; return stdout."""
-        from unittest.mock import patch
-        buf = io.StringIO()
-        with patch("ixx.showoff._sleep", return_value=None):
-            with contextlib.redirect_stdout(buf):
-                from ixx.showoff import run
-                run(mode)
-        return buf.getvalue()
-
-    # ── exit codes ────────────────────────────────────────────────────────────
-
-    def test_showoff_exits_0(self):
-        self.assertEqual(self._run_showoff().returncode, 0)
-
-    def test_showoff_quick_exits_0(self):
-        self.assertEqual(self._run_showoff("quick").returncode, 0)
-
-    def test_showoff_plain_exits_0(self):
-        self.assertEqual(self._run_showoff("plain").returncode, 0)
-
-    def test_showoff_full_exits_0(self):
-        self.assertEqual(self._run_showoff("full").returncode, 0)
-
-    # ── required content in plain output ─────────────────────────────────────
-
-    def _plain_out(self) -> str:
-        r = self._run_showoff("plain")
-        self.assertEqual(r.returncode, 0)
-        return r.stdout
-
-    def test_output_contains_ixx(self):
-        self.assertIn("IXX", self._plain_out())
-
-    def test_output_contains_tagline(self):
-        self.assertIn("The language for the user", self._plain_out())
-
-    def test_output_contains_final_line(self):
-        self.assertIn("The computer, translated", self._plain_out())
-
-    def test_output_contains_boot_header(self):
-        self.assertIn("BOOT", self._plain_out())
-
-    def test_output_contains_validation_header(self):
-        self.assertIn("VALIDATION", self._plain_out())
-
-    def test_output_contains_functions(self):
-        self.assertIn("FUNCTIONS", self._plain_out())
-
-    def test_output_contains_file_io(self):
-        out = self._plain_out()
-        # Section header "FILES + ERRORS" or code using read/readlines
-        self.assertTrue("FILES" in out or "read" in out)
-
-    def test_output_contains_try_catch(self):
-        out = self._plain_out().lower()
-        self.assertIn("try", out)
-        self.assertIn("catch", out)
-
-    def test_output_contains_validation_numbers(self):
-        out = self._plain_out()
-        self.assertIn("478", out)
-        self.assertIn("229", out)
-
-    def test_output_contains_478_passed(self):
-        self.assertIn("478 passed", self._plain_out())
-
-    def test_output_contains_229_passed(self):
-        self.assertIn("229 passed", self._plain_out())
-
-    # ── in-process tests with mocked sleep ────────────────────────────────────
-
-    def test_default_mode_runs_without_error(self):
-        out = self._run_in_process("default")
-        self.assertIn("IXX", out)
-        self.assertIn("The language for the user", out)
-        self.assertIn("BOOT", out)
-
-    def test_full_mode_includes_timeline(self):
-        out = self._run_in_process("full")
-        self.assertIn("The computer, translated", out)
-        self.assertIn("TIMELINE", out)
-        self.assertIn("v0.4", out)
-
-    def test_quick_mode_is_shorter(self):
-        out = self._run_in_process("quick")
-        self.assertIn("IXX", out)
-        self.assertIn("double", out)  # Functions code example present in quick
-        # Slogans section should be absent
-        self.assertNotIn("No braces", out)
-
-    def test_unknown_subcommand_falls_back_to_default(self):
-        r = self._run_showoff("garbage")
-        self.assertEqual(r.returncode, 0)
-        self.assertIn("IXX", r.stdout)
-
-    # ── plain mode produces no ANSI even when IXX_COLOR=1 ────────────────────
-
-    def test_no_color_disables_ansi(self):
-        env = {**os.environ, "NO_COLOR": "1", "IXX_COLOR": "",
-               "PYTHONIOENCODING": "utf-8"}
-        r = subprocess.run(
-            [sys.executable, "-m", "ixx", "showoff", "plain"],
-            capture_output=True, text=True, encoding="utf-8",
-            errors="replace", timeout=15, env=env,
-        )
-        self.assertEqual(r.returncode, 0)
-        self.assertNotIn("\033[", r.stdout)
-
-    def test_plain_mode_no_ansi_even_with_forced_color(self):
-        """plain mode must suppress ANSI even if IXX_COLOR=1."""
-        env = {**os.environ, "IXX_COLOR": "1", "NO_COLOR": "",
-               "PYTHONIOENCODING": "utf-8"}
-        # Remove NO_COLOR so IXX_COLOR=1 can activate colors
-        env.pop("NO_COLOR", None)
-        r = subprocess.run(
-            [sys.executable, "-m", "ixx", "showoff", "plain"],
-            capture_output=True, text=True, encoding="utf-8",
-            errors="replace", timeout=15, env=env,
         )
         self.assertEqual(r.returncode, 0)
         self.assertNotIn("\033[", r.stdout)
