@@ -158,7 +158,7 @@ def _hr(label: str, *, plain: bool = False) -> None:
     eq   = "\u2550" if uni else "="      # ═
     line = f"  {eq}{eq} {label} {eq}{eq}"
     print()
-    print(_c(_BOLD, line, plain=plain))
+    print(_c(_BOLD + _YELLOW, line, plain=plain))
     print()
 
 
@@ -227,8 +227,9 @@ def _comparison(
 
     # ── purpose tag ────────────────────────────────────────────────────────────
     if purpose:
-        type_line(f"  {purpose}", delay=0.018, plain=plain)
+        _type_col(_DIM, f"  {purpose}", delay=0.016, plain=plain)
         pause(0.30, plain=plain, quick=quick)
+        print()
 
     # ── OLD WAY ────────────────────────────────────────────────────────────────
     print(f"  {_c(_DIM, f'OLD WAY: {old_label}', plain=plain)}")
@@ -297,9 +298,6 @@ def _code_reveal(
 # ── Sections ───────────────────────────────────────────────────────────────────
 
 def _section_boot(*, plain: bool = False, quick: bool = False) -> None:
-    uni = _unicode_ok() and not plain
-    hdr = "\u2550\u2550" if uni else "=="   # ══
-
     # Header
     _hr("IXX SHOWOFF", plain=plain)
     pause(0.20 if quick else 0.40, plain=plain)
@@ -311,24 +309,36 @@ def _section_boot(*, plain: bool = False, quick: bool = False) -> None:
         type_line("  Readable scripting for real terminal work.", delay=0.015, plain=plain)
         pause(0.30, plain=plain)
     else:
-        # Animated status lines: label   ready (green)
         statuses = [
-            ("runtime  ", "ready"),
-            ("syntax   ", "ready"),
-            ("shell    ", "ready"),
-            ("examples ", "ready"),
+            ("runtime ", "ready"),
+            ("syntax  ", "ready"),
+            ("shell   ", "ready"),
+            ("examples", "ready"),
         ]
         for label, status in statuses:
             if not plain and sys.stdout.isatty():
-                # Type the label, stay on same line, pause, then type status in green
-                for ch in f"  {label}":
+                # Type label
+                for ch in f"  {label}  ":
                     sys.stdout.write(ch)
                     sys.stdout.flush()
-                    _sleep(0.018)
-                pause(0.12, plain=plain)
+                    _sleep(0.015)
+                # Loading dots: ".", "  ..", "  ..." in yellow with 0.5s pauses
+                for dot_str in [".", "  ..", "  ..."]:
+                    if _ansi_ok():
+                        sys.stdout.write(_YELLOW)
+                    for ch in dot_str:
+                        sys.stdout.write(ch)
+                        sys.stdout.flush()
+                        _sleep(0.04)
+                    if _ansi_ok():
+                        sys.stdout.write(_RESET)
+                    sys.stdout.flush()
+                    _sleep(0.48)
+                # "ready" in green
+                sys.stdout.write("  ")
                 if _ansi_ok():
                     sys.stdout.write(_GREEN)
-                for ch in f"  {status}":
+                for ch in status:
                     sys.stdout.write(ch)
                     sys.stdout.flush()
                     _sleep(0.022)
@@ -336,8 +346,8 @@ def _section_boot(*, plain: bool = False, quick: bool = False) -> None:
                     sys.stdout.write(_RESET)
                 sys.stdout.write("\n")
             else:
-                print(f"  {label}  {_c(_GREEN, status, plain=plain)}")
-            pause(0.35, plain=plain)
+                print(f"  {label}  ...  {_c(_GREEN, status, plain=plain)}")
+            pause(0.30, plain=plain)
 
         pause(0.50, plain=plain)
         print()
@@ -493,25 +503,35 @@ def _section_comparisons(*,
 def _section_native_note(*, plain: bool = False) -> None:
     """IXX does not replace what you already know. (full mode only)"""
     _hr("NATIVE COMMANDS", plain=plain)
-    content = [
+
+    intro = [
         "IXX is not trying to hide the system.",
         "It gives common work a cleaner front door.",
-        "",
-        "KNOWN COMMAND:",
-        "  powershell -ExecutionPolicy Bypass -File setup.ps1",
-        "",
-        "PLANNED:",
-        '  native powershell "-ExecutionPolicy Bypass -File setup.ps1"',
-        "",
+    ]
+    for line in intro:
+        type_line(f"  {line}", delay=0.020, plain=plain)
+        pause(0.22, plain=plain)
+    print()
+
+    # OLD / PLANNED styled like a mini comparison
+    print(f"  {_c(_DIM, 'KNOWN COMMAND:', plain=plain)}")
+    type_line("    powershell -ExecutionPolicy Bypass -File setup.ps1",
+              delay=0.010, plain=plain)
+    pause(0.45, plain=plain)
+    print()
+    print(f"  {_c(_BOLD + _CYAN, 'PLANNED:', plain=plain)}")
+    _type_col(_CYAN, '    native powershell "-ExecutionPolicy Bypass -File setup.ps1"',
+              delay=0.024, plain=plain)
+    pause(0.45, plain=plain)
+    print()
+
+    footer = [
         "Run old commands when you need them.",
         "Learn the clean IXX version when one exists.",
     ]
-    for line in content:
-        if line:
-            type_line(f"  {line}", delay=0.020, plain=plain)
-            pause(0.22, plain=plain)
-        else:
-            print()
+    for line in footer:
+        type_line(f"  {line}", delay=0.020, plain=plain)
+        pause(0.22, plain=plain)
     print()
     pause(0.50, plain=plain)
 

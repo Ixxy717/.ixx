@@ -4,6 +4,23 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.2.7] — showoff: dot-loading boot, yellow headers, dim purpose tags, native note polish
+
+### Changed
+- **Boot sequence** — status lines now animate as `runtime   .  ..  ...   ready`:
+  - Label types out at 0.015s/char
+  - Each dot group (`.`, `..`, `...`) types in yellow with 0.48s pause between groups
+  - `ready` types in green after the dots — the yellow-to-green transition feels like a real init sequence
+- **Section headers** (`_hr()`) — changed from bold white to **bold yellow**; creates a clear visual layer: yellow = structure, cyan = IXX content, green = output, dim = old/labels
+- **Purpose tags** in comparisons — changed from plain white to **dim text**; reads as a subtitle, not competing with the code
+- **`_section_native_note`** — `KNOWN COMMAND:` now dim (old-way treatment), `PLANNED:` now bold+cyan (IXX-way treatment), matching the visual language of the comparison blocks
+
+### Fixed
+- Removed unused `uni`/`hdr` variables left over in `_section_boot`
+- Added blank line between purpose tag and `OLD WAY:` label for breathing room
+
+---
+
 ## [0.6.2.6] — showoff: new boot/final/slogan text, purpose tags, [enter] on comparisons
 
 ### Changed
