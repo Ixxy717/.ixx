@@ -144,7 +144,23 @@ def _hr(label: str, *, plain: bool = False) -> None:
 def _divider(*, plain: bool = False) -> None:
     uni = _unicode_ok() and not plain
     ch  = "\u2500" if uni else "-"       # ─
-    print(f"  {_c(_DIM, ch * 62, plain=plain)}")
+
+    if plain or not sys.stdout.isatty():
+        # In plain/piped mode just print it, no animation
+        line = "  " + ch * 62
+        print(_c(_DIM, line, plain=plain))
+        return
+
+    # Slide the line in character by character — fast scribble feel
+    if _ansi_ok():
+        print(_DIM, end="", flush=True)
+    print("  ", end="", flush=True)
+    for _ in range(62):
+        print(ch, end="", flush=True)
+        _sleep(0.003)
+    if _ansi_ok():
+        print(_RESET, end="", flush=True)
+    print()
 
 
 def _bar_line(label: str, value_str: str, *,
@@ -190,7 +206,7 @@ def _comparison(
     print(f"  {_c(_DIM, f'OLD WAY: {old_label}', plain=plain)}")
     for line in old_lines:
         type_line(f"    {line}", delay=d_old, plain=plain)
-    pause(0.45, plain=plain, quick=quick)
+    pause(0.60, plain=plain, quick=quick)   # let old-way sink in before IXX appears
     print()
 
     # ── IXX WAY ────────────────────────────────────────────────────────────────
@@ -198,18 +214,20 @@ def _comparison(
     print(f"  {_c(_BOLD + _CYAN, f'IXX WAY{note}', plain=plain)}")
     for line in ixx_lines:
         _type_col(_CYAN, f"    {line}", delay=d_ixx, plain=plain)
-        pause(0.28, plain=plain, quick=quick)
+        pause(0.30, plain=plain, quick=quick)
 
     if ixx_output:
-        pause(0.40, plain=plain, quick=quick)
+        pause(0.45, plain=plain, quick=quick)
         for out in ixx_output:
-            print(f"    {_c(_GREEN, out, plain=plain)}")
+            _type_col(_GREEN, f"    {out}", delay=0.015 if not quick else 0.008,
+                      plain=plain)
+            pause(0.10, plain=plain, quick=quick)
 
     print()
-    pause(0.45, plain=plain, quick=quick)
+    pause(0.55, plain=plain, quick=quick)
     _divider(plain=plain)
     print()
-    pause(0.22, plain=plain, quick=quick)
+    pause(0.30, plain=plain, quick=quick)
 
 
 def _code_reveal(
@@ -219,25 +237,29 @@ def _code_reveal(
     plain: bool = False,
     quick: bool = False,
 ) -> None:
-    """Show CODE block, pause, then reveal OUTPUT."""
-    d = 0.010 if quick else 0.024
-    p = 0.08  if quick else 0.28    # inter-line pause inside code block
+    """Show CODE block (plain text), pause, then reveal OUTPUT (green, animated)."""
+    d = 0.010 if quick else 0.022
+    p = 0.08  if quick else 0.26    # inter-line pause inside code block
 
     print(f"  {_c(_DIM, 'CODE', plain=plain)}")
     for line in code_lines:
         if line:
-            _type_col(_CYAN, f"    {line}", delay=d, plain=plain)
+            # Plain (neutral) color for code — not cyan, not colored
+            # so code reads clearly and OUTPUT pops in contrast
+            type_line(f"    {line}", delay=d, plain=plain)
             pause(p, plain=plain)
         else:
             print()
 
-    pause(0.20 if quick else 0.80, plain=plain)
+    pause(0.18 if quick else 0.80, plain=plain)
     print()
     print(f"  {_c(_GREEN, 'OUTPUT', plain=plain)}")
     for line in output_lines:
-        print(f"    {_c(_GREEN, line, plain=plain)}")
+        _type_col(_GREEN, f"    {line}", delay=0.016 if not quick else 0.008,
+                  plain=plain)
+        pause(0.10, plain=plain, quick=quick)
     print()
-    pause(0.15 if quick else 0.55, plain=plain)
+    pause(0.12 if quick else 0.50, plain=plain)
 
 
 # ── Sections ───────────────────────────────────────────────────────────────────
@@ -544,7 +566,7 @@ def _section_real_script(*, plain: bool = False) -> None:
     ]
     for line in script:
         if line:
-            _type_col(_CYAN, f"    {line}", delay=0.018, plain=plain)
+            type_line(f"    {line}", delay=0.016, plain=plain)
             pause(0.20, plain=plain)
         else:
             print()
@@ -558,7 +580,8 @@ def _section_real_script(*, plain: bool = False) -> None:
         "Result saved.",
         "No previous log.",
     ]:
-        print(f"    {_c(_GREEN, line, plain=plain)}")
+        _type_col(_GREEN, f"    {line}", delay=0.016, plain=plain)
+        pause(0.10, plain=plain)
     print()
     pause(0.60, plain=plain)
 

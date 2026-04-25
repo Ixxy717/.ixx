@@ -4,6 +4,17 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.2.4] — showoff: all animations now consistent, less color fatigue
+
+### Fixed
+- **`ixx showoff` outputs no longer jump in instantly** — OUTPUT lines in both `_code_reveal` and `_comparison` now type out character by character (green, 0.015–0.016s/char)
+- **Horizontal dividers no longer slam in** — `_divider()` now draws character by character at 0.003s/char (fast scribble feel, ~0.19s total)
+- **"All blue code" resolved** — `_code_reveal` code lines changed from cyan to the terminal's default text color; cyan is now reserved only for IXX WAY comparison lines where the contrast with dim OLD WAY matters
+- **`_section_real_script` inline code** updated with the same plain-color + animated-output fix
+- **Pacing breathing** — added 0.60s pause after OLD WAY block (was 0.45s) and 0.30s post-divider (was 0.22s) so each comparison has room to breathe
+
+---
+
 ## [0.6.2.3] — showoff: OLD WAY -> IXX WAY comparisons, readable pacing
 
 ### Changed
