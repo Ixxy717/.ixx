@@ -842,4 +842,4 @@ catch
 
 ---
 
-*Dictionary current as of IXX v0.6.2.*
+*Dictionary current as of IXX v0.6.3.*

@@ -4,6 +4,26 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.3.0] — interpreter refactored into `ixx/runtime/` package
+
+### Changed
+- **`ixx/interpreter.py`** slimmed from 755 lines to ~250 lines — now contains only `_ReturnSignal`, `Interpreter`, and the four runtime import lines
+- **`ixx/runtime/`** package extracted from the interpreter:
+  - `errors.py` — `IXXRuntimeError`
+  - `values.py` — `ixx_type_name`, `display`, `truthy`
+  - `environment.py` — `Environment`, `FunctionEnvironment`
+  - `builtins/core.py` — `count`, `text`, `number`, `type`, `ask`
+  - `builtins/text.py` — `upper`, `lower`, `trim`, `replace`, `split`, `join`
+  - `builtins/math.py` — `round`, `abs`, `min`, `max`
+  - `builtins/lists.py` — `first`, `last`, `sort`, `reverse`
+  - `builtins/files.py` — `read`, `readlines`, `write`, `append`, `exists`
+  - `builtins/color.py` — `color`
+  - `builtins/__init__.py` — `BUILT_INS` combined registry
+- **Zero behavior change** — all 507 tests pass, StressTest FILE/ASSERT/EXPECTED FAIL: 0
+- **Backward-compatible** — `IXXRuntimeError` re-exported from `interpreter.py`; no external import sites changed
+
+---
+
 ## [0.6.2.7] — showoff: dot-loading boot, yellow headers, dim purpose tags, native note polish
 
 ### Changed
