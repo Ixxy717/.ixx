@@ -17,9 +17,9 @@ import re
 import difflib
 from pathlib import Path
 
-from ._version import VERSION
+from ._version import VERSION, RELEASE_DATE
 
-_KNOWN_COMMANDS = ["run", "check", "version", "help", "shell", "do", "setup", "demo"]
+_KNOWN_COMMANDS = ["run", "check", "version", "help", "shell", "do", "setup", "demo", "showoff"]
 
 HELP_TEXT = """
 IXX - executable checklist-style code
@@ -35,6 +35,10 @@ Usage:
   ixx do "ip wifi"        run one shell command and exit
   ixx demo                run the built-in demo script
   ixx demo interactive    run the step-by-step interactive walkthrough
+  ixx showoff             polished visual presentation of IXX
+  ixx showoff quick       shorter version
+  ixx showoff full        full version (same as default)
+  ixx showoff plain       no animation, minimal colors
 
 Inside the ixx shell:
   update                  update ixx to the latest version (pip install --upgrade ixx)
@@ -271,7 +275,7 @@ def main() -> None:
 
     # --- ixx version ---
     if cmd == "version":
-        print(f"ixx {VERSION}")
+        print(f"ixx {VERSION}  (released {RELEASE_DATE})")
         return
 
     # --- ixx help ---
@@ -303,6 +307,15 @@ def main() -> None:
     if cmd == "setup":
         from .shell.commands.setup import handle_setup
         handle_setup([])
+        return
+
+    # --- ixx showoff [quick|full|plain] ---
+    if cmd == "showoff":
+        from .showoff import run as _showoff_run
+        sub = args[1].lower() if len(args) > 1 else "default"
+        if sub not in ("default", "quick", "full", "plain"):
+            sub = "default"
+        _showoff_run(sub)
         return
 
     # --- ixx do "<shell command>" ---

@@ -11,6 +11,7 @@ Run with:
 from __future__ import annotations
 import contextlib
 import io
+import os
 import subprocess
 import sys
 import textwrap
@@ -536,6 +537,118 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         combined = (result.stdout + result.stderr).strip()
         self.assertIn("IXX Shell", combined)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestShowoff(unittest.TestCase):
+    """Tests for ixx showoff — all modes exit 0, content is correct."""
+
+    # ── helpers ───────────────────────────────────────────────────────────────
+
+    def _run_showoff(self, *extra_args: str) -> subprocess.CompletedProcess:
+        """Run ixx showoff via subprocess (stdout captured -> no animation)."""
+        env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+        return subprocess.run(
+            [sys.executable, "-m", "ixx", "showoff"] + list(extra_args),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+            env=env,
+        )
+
+    def _run_in_process(self, mode: str) -> str:
+        """Run showoff in-process with _sleep mocked out; return stdout."""
+        from unittest.mock import patch
+        buf = io.StringIO()
+        with patch("ixx.showoff._sleep", return_value=None):
+            with contextlib.redirect_stdout(buf):
+                from ixx.showoff import run
+                run(mode)
+        return buf.getvalue()
+
+    # ── exit codes ────────────────────────────────────────────────────────────
+
+    def test_showoff_exits_0(self):
+        self.assertEqual(self._run_showoff().returncode, 0)
+
+    def test_showoff_quick_exits_0(self):
+        self.assertEqual(self._run_showoff("quick").returncode, 0)
+
+    def test_showoff_plain_exits_0(self):
+        self.assertEqual(self._run_showoff("plain").returncode, 0)
+
+    def test_showoff_full_exits_0(self):
+        self.assertEqual(self._run_showoff("full").returncode, 0)
+
+    # ── required content in plain output ─────────────────────────────────────
+
+    def _plain_out(self) -> str:
+        r = self._run_showoff("plain")
+        self.assertEqual(r.returncode, 0)
+        return r.stdout
+
+    def test_output_contains_ixx(self):
+        self.assertIn("IXX", self._plain_out())
+
+    def test_output_contains_tagline(self):
+        self.assertIn("The language for the user", self._plain_out())
+
+    def test_output_contains_final_line(self):
+        self.assertIn("The computer, translated", self._plain_out())
+
+    def test_output_contains_functions(self):
+        self.assertIn("functions", self._plain_out().lower())
+
+    def test_output_contains_file_io(self):
+        out = self._plain_out().lower()
+        self.assertTrue("file i/o" in out or "file io" in out or "read" in out)
+
+    def test_output_contains_try_catch(self):
+        out = self._plain_out().lower()
+        self.assertTrue("try" in out and "catch" in out)
+
+    def test_output_contains_validation_numbers(self):
+        out = self._plain_out()
+        self.assertIn("478", out)
+        self.assertIn("229", out)
+
+    # ── in-process tests with mocked sleep ────────────────────────────────────
+
+    def test_default_mode_runs_without_error(self):
+        out = self._run_in_process("default")
+        self.assertIn("IXX", out)
+        self.assertIn("The language for the user", out)
+
+    def test_full_mode_runs_without_error(self):
+        out = self._run_in_process("full")
+        self.assertIn("The computer, translated", out)
+
+    def test_quick_mode_skips_features_section(self):
+        out = self._run_in_process("quick")
+        # Quick mode should still show IXX and at least one code example
+        self.assertIn("IXX", out)
+        self.assertIn("double", out)  # the Functions code example is in quick mode
+
+    def test_unknown_subcommand_falls_back_to_default(self):
+        r = self._run_showoff("garbage")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("IXX", r.stdout)
+
+    # ── NO_COLOR disables ANSI codes ──────────────────────────────────────────
+
+    def test_no_color_disables_ansi(self):
+        env = {**os.environ, "NO_COLOR": "1", "IXX_COLOR": "",
+               "PYTHONIOENCODING": "utf-8"}
+        r = subprocess.run(
+            [sys.executable, "-m", "ixx", "showoff", "plain"],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=15, env=env,
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertNotIn("\033[", r.stdout)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

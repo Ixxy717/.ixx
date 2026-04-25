@@ -4,6 +4,15 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.2.1] — showoff command, version release date
+
+### Added
+- **`ixx showoff`** — polished terminal presentation of IXX. Supports `quick`, `full`, and `plain` sub-modes.
+- **Release date in version output** — `ixx version` now shows `ixx 0.6.2.1  (released 2026-04-24)`.
+- 16 new tests in `TestShowoff` covering exit codes, content, and NO_COLOR.
+
+---
+
 ## [0.6.2] — Shell polish: colored banner, update command, always-on update notice
 
 ### Changed
