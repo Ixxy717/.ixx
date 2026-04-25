@@ -45,6 +45,10 @@ All IXX commands are run from any terminal (PowerShell, CMD, bash, etc.) after
 | `ixx demo interactive` | Run the step-by-step interactive walkthrough |
 | `ixx setup` | Register the `.ixx` file type and icon on Windows |
 | `ixx do "<command>"` | Run one IXX shell command and exit |
+| `ixx showoff` | Animated terminal presentation of IXX features |
+| `ixx showoff quick` | Short trailer (~8 seconds) |
+| `ixx showoff full` | Extended presentation (~50 seconds) |
+| `ixx showoff plain` | No animation, plain text output |
 
 **Examples:**
 
@@ -504,7 +508,7 @@ say "Hello, {answer}"
 | `upper(x)` | text | text | ALL CAPS |
 | `lower(x)` | text | text | all lowercase |
 | `trim(x)` | text | text | Removes leading and trailing whitespace |
-| `replace(x, old, new)` | text, text, text | text | Replaces all occurrences of `old` with `new` |
+| `replace(x, find, with)` | text, text, text | text | Replaces all occurrences of `find` with `with` |
 | `split(x, sep)` | text, text | list | Splits text on separator |
 | `join(list, sep)` | list, text | text | Joins list items with separator |
 
@@ -838,4 +842,4 @@ catch
 
 ---
 
-*Dictionary current as of IXX v0.6.0.*
+*Dictionary current as of IXX v0.6.2.*

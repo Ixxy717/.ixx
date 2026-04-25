@@ -173,6 +173,10 @@ if user is "Ixxy"
 | `ixx demo` | run the bundled demo script |
 | `ixx demo interactive` | step-by-step interactive walkthrough |
 | `ixx setup` | register `.ixx` file type and icon on Windows |
+| `ixx showoff` | animated terminal presentation of IXX features |
+| `ixx showoff quick` | short trailer (~8s) |
+| `ixx showoff full` | extended presentation (~50s) |
+| `ixx showoff plain` | no animation, plain text output |
 
 ---
 
@@ -380,7 +384,7 @@ The prototype ships with two test suites.
 python -m unittest discover -s tests -p "test*.py"
 ```
 
-**478 tests passing** across: language basics, strings, numbers, booleans, conditions, dash blocks, loops, lists, comparisons, `contains`, logic, functions, built-ins (text/math/lists/color/file I/O), `try`/`catch`, `nothing`, scoping, error handling, CLI commands, shell guidance, command handlers, path aliases, format helpers, and system commands.
+**507 tests passing** across: language basics, strings, numbers, booleans, conditions, dash blocks, loops, lists, comparisons, `contains`, logic, functions, built-ins (text/math/lists/color/file I/O), `try`/`catch`, `nothing`, scoping, error handling, CLI commands, shell guidance, command handlers, path aliases, format helpers, system commands, and `showoff` presentation.
 
 ### End-to-end StressTest suite
 

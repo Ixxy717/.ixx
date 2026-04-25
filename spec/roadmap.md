@@ -249,9 +249,9 @@ Respects `NO_COLOR` and `IXX_COLOR=0`. Plain-text fallback when color is off.
 
 ---
 
-## v0.5 — try / if error (pending)
+## v0.6 — try / catch (completed)
 
-Error handling at the IXX level. Syntax TBD.
+Error handling shipped in v0.6. `try` / `catch` catches runtime errors and file I/O failures. The optional `catch` block receives the error message in the `error` variable. Syntax TBD items resolved — see `spec/language.md` §try/catch for full reference.
 
 ---
 
