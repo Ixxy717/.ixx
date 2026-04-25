@@ -1,13 +1,12 @@
 """
-IXX Showoff — polished terminal presentation.
+IXX Showoff -- cinematic terminal presentation.
 
-Run with:
-    ixx showoff              default (animated)
-    ixx showoff quick        shorter cut
-    ixx showoff full         all sections (same as default)
-    ixx showoff plain        no animation, minimal colors
+    ixx showoff              default (~15s animated)
+    ixx showoff quick        short trailer (~5s)
+    ixx showoff full         extended + release timeline
+    ixx showoff plain        no animation, ASCII fallback
 
-Designed to be imported and tested; mock _sleep to run instantly in tests.
+All sleep calls go through _sleep() so tests can mock it to return_value=None.
 """
 
 from __future__ import annotations
@@ -15,10 +14,11 @@ from __future__ import annotations
 import os
 import sys
 import time
+import shutil
 from typing import Optional
 
 
-# ── ANSI ──────────────────────────────────────────────────────────────────────
+# ── ANSI codes ────────────────────────────────────────────────────────────────
 
 _BOLD   = "\033[1m"
 _DIM    = "\033[2m"
@@ -29,7 +29,7 @@ _RESET  = "\033[0m"
 
 
 def _ansi_ok() -> bool:
-    """True if ANSI escape codes will render — mirrors renderer._enable_ansi."""
+    """True if ANSI escape codes will render (mirrors renderer._enable_ansi)."""
     if os.environ.get("NO_COLOR") is not None:
         return False
     ic = os.environ.get("IXX_COLOR")
@@ -44,11 +44,11 @@ def _ansi_ok() -> bool:
     try:
         import ctypes
         k = ctypes.windll.kernel32          # type: ignore[attr-defined]
-        h = k.GetStdHandle(-11)             # STD_OUTPUT_HANDLE
+        h = k.GetStdHandle(-11)
         m = ctypes.c_ulong(0)
         if not k.GetConsoleMode(h, ctypes.byref(m)):
             return False
-        if m.value & 0x0004:                # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+        if m.value & 0x0004:
             return True
         return bool(k.SetConsoleMode(h, m.value | 0x0004))
     except Exception:
@@ -56,19 +56,29 @@ def _ansi_ok() -> bool:
 
 
 def _unicode_ok() -> bool:
-    """True if stdout can encode Unicode box-drawing characters."""
+    enc = getattr(sys.stdout, "encoding", None) or "utf-8"
     try:
-        "│".encode(getattr(sys.stdout, "encoding", None) or "utf-8")
+        "│█░".encode(enc)
         return True
     except (UnicodeEncodeError, LookupError):
         return False
 
 
-def _c(code: str, text: str) -> str:
+def _c(code: str, text: str, *, plain: bool = False) -> str:
+    """Apply ANSI code to text, respecting plain mode and NO_COLOR."""
+    if plain:
+        return text
     return f"{code}{text}{_RESET}" if _ansi_ok() else text
 
 
-# ── Timing (mockable in tests) ─────────────────────────────────────────────────
+def _width() -> int:
+    try:
+        return min(shutil.get_terminal_size((80, 24)).columns, 80)
+    except Exception:
+        return 80
+
+
+# ── Timing (mock this in tests) ────────────────────────────────────────────────
 
 def _sleep(seconds: float) -> None:
     time.sleep(seconds)
@@ -77,7 +87,7 @@ def _sleep(seconds: float) -> None:
 # ── Primitives ────────────────────────────────────────────────────────────────
 
 def type_line(text: str, delay: float = 0.025, *, plain: bool = False) -> None:
-    """Print text character-by-character; instant when not a tty or plain."""
+    """Type plain text char-by-char. Do NOT pass pre-colored text here."""
     if plain or not sys.stdout.isatty():
         print(text)
         return
@@ -87,12 +97,16 @@ def type_line(text: str, delay: float = 0.025, *, plain: bool = False) -> None:
     print()
 
 
-def _type_colored(code: str, text: str, delay: float = 0.08,
-                  *, plain: bool = False) -> None:
-    """Typewrite text with an ANSI color applied to the whole sequence."""
-    if plain or not sys.stdout.isatty():
+def _type_col(code: str, text: str, delay: float = 0.025, *,
+              plain: bool = False) -> None:
+    """Type text with ANSI color wrapping; plain mode prints without color."""
+    if plain:
+        print(text)
+        return
+    if not sys.stdout.isatty():
         print(_c(code, text))
         return
+    # Animated path: emit ANSI start, type chars, reset
     if _ansi_ok():
         print(code, end="", flush=True)
     for ch in text:
@@ -103,176 +117,286 @@ def _type_colored(code: str, text: str, delay: float = 0.08,
     print()
 
 
-def pause(seconds: float, *, plain: bool = False) -> None:
-    """Pause only when on a real interactive tty and not in plain mode."""
+def pause(seconds: float, *, plain: bool = False, quick: bool = False) -> None:
     if not plain and sys.stdout.isatty():
-        _sleep(seconds)
+        _sleep(seconds * 0.30 if quick else seconds)
 
 
-def card(title: str, lines: list[str], *, plain: bool = False) -> None:
-    """Print a titled feature card."""
-    print(_c(_BOLD + _CYAN, f"  {title}"))
-    for line in lines:
-        print(f"    {line}")
-    print()
+# ── Layout helpers ─────────────────────────────────────────────────────────────
 
-
-def code_block(
-    title: str,
-    code_lines: list[str],
-    output_lines: Optional[list[str]] = None,
-    *,
-    plain: bool = False,
-) -> None:
-    """Print a boxed code snippet with optional expected output."""
+def _hr(label: str, *, plain: bool = False) -> None:
+    """Section header:  == LABEL ==  or  ══ LABEL ══"""
     uni = _unicode_ok() and not plain
-    W = 48  # total visual line width (including border chars)
-    inner = W - 4  # content area width between ┌ and ┐
-
-    if uni:
-        # ┌─ title ──────────────────────────────────┐
-        t = f"─ {title} "
-        fill = "─" * max(0, inner - len(t))
-        print(f"  ┌{t}{fill}┐")
-
-        for line in code_lines:
-            content = f"  {line}"
-            if len(content) > inner:
-                content = content[:inner - 3] + "..."
-            pad = " " * (inner - len(content))
-            print(f"  │{_c(_CYAN, content)}{pad}│")
-
-        print(f"  └{'─' * inner}┘")
-    else:
-        print(f"  # {title}")
-        for line in code_lines:
-            print(f"    {_c(_CYAN, line)}")
-
-    if output_lines:
-        arrow = _c(_GREEN, "→" if uni else "->")
-        for out in output_lines:
-            print(f"  {arrow} {out}")
+    eq  = "\u2550" if uni else "="   # ═
+    line = f"  {eq}{eq} {label} {eq}{eq}"
+    print()
+    print(_c(_BOLD, line, plain=plain))
     print()
 
 
-def progress(label: str, status: str, *, plain: bool = False) -> None:
-    """Print a single validation result line."""
-    check = "✓" if _unicode_ok() and not plain else "+"
-    print(f"    {_c(_GREEN, check)}  {label:<28}{_c(_DIM, status)}")
+def _bar_line(label: str, value_str: str, *, plain: bool = False,
+              quick: bool = False) -> None:
+    """Animated fill bar.  [████████████████████] label    value"""
+    W   = 20
+    uni = _unicode_ok() and not plain
+    FIL = "\u2588" if uni else "#"   # █
+    EMP = "\u2591" if uni else "."   # ░
+
+    if plain or not sys.stdout.isatty():
+        print(f"  [{FIL * W}] {label:<22} {value_str}")
+        return
+
+    delay = 0.008 if quick else 0.018
+    for i in range(W + 1):
+        bar  = FIL * i + EMP * (W - i)
+        val  = _c(_GREEN, value_str)
+        print(f"\r  [{bar}] {label:<22} {val}", end="", flush=True)
+        if i < W:
+            _sleep(delay)
+    print()
 
 
 # ── Sections ──────────────────────────────────────────────────────────────────
 
-def _section_boot(*, plain: bool = False) -> None:
-    print()
-    _type_colored(_BOLD + _CYAN, "  IXX", delay=0.10, plain=plain)
-    pause(0.25, plain=plain)
-    type_line("  The language for the user.", delay=0.022, plain=plain)
-    pause(0.55, plain=plain)
-    print()
+def _section_boot(*, plain: bool = False, quick: bool = False) -> None:
+    _hr("BOOT", plain=plain)
 
-
-def _section_features(*, plain: bool = False) -> None:
-    features = [
-        ("Visible dash blocks",    "Structure you can see -- no braces, no invisible whitespace."),
-        ("Readable comparisons",   "if score more than 90  -- not  score > 90"),
-        ("User-defined functions", "Define once, call anywhere. Local scope, clean returns."),
-        ("Built-in library",       "trim, upper, sort, round, color, count -- no imports needed."),
-        ("File I/O",               "read, write, append, exists -- files in one line."),
-        ("try / catch",            "Handle errors gracefully. Silent try discards the error."),
-        ("Shell commands",         "cpu, ram, gpu, disk, ip, wifi -- live system info."),
+    d = 0.012 if quick else 0.026
+    msgs = ["> booting IXX...", "> ready."] if quick else [
+        "> booting IXX...",
+        "> loading readable syntax...",
+        "> removing symbolic soup...",
+        "> translating computer nonsense...",
+        "> ready.",
     ]
-    print(_c(_BOLD, "  What IXX does"))
+    for msg in msgs:
+        _type_col(_DIM, f"  {msg}", delay=d, plain=plain)
+        pause(0.08, plain=plain, quick=quick)
+
+    pause(0.5, plain=plain, quick=quick)
     print()
-    for name, desc in features:
-        print(f"  {_c(_CYAN, name)}")
-        print(f"    {desc}")
-        print()
-        pause(0.12, plain=plain)
+
+    # Big title
+    _type_col(_BOLD + _CYAN, "  IXX", delay=0.10, plain=plain)
+    pause(0.20, plain=plain, quick=quick)
+    type_line("  The language for the user.", delay=0.022, plain=plain)
+    pause(0.15, plain=plain, quick=quick)
+    type_line("  The computer, translated.", delay=0.022, plain=plain)
+    pause(0.65, plain=plain, quick=quick)
 
 
-def _section_code_examples(*, plain: bool = False, quick: bool = False) -> None:
-    print(_c(_BOLD, "  How it looks"))
+def _section_slogans(*, plain: bool = False) -> None:
+    lines = [
+        "No braces.",
+        "No semicolons.",
+        "No guessing what -gt means.",
+        "Just instructions.",
+    ]
     print()
-    pause(0.20, plain=plain)
+    for line in lines:
+        _type_col(_BOLD, f"  {line}", delay=0.032, plain=plain)
+        pause(0.10, plain=plain)
+    pause(0.35, plain=plain)
+    type_line("  The terminal starts speaking human.", delay=0.020, plain=plain)
+    pause(0.70, plain=plain)
 
-    code_block("Hello, World", [
-        'name = "Ixxy"',
-        'say "Hello, {name}"',
-    ], ["Hello, Ixxy"], plain=plain)
-    pause(0.40, plain=plain)
+
+def _section_before_after(*, plain: bool = False, quick: bool = False) -> None:
+    _hr("READABLE CODE", plain=plain)
+    d = 0.010 if quick else 0.022
+
+    # Comparison 1: conditional
+    print(f"  {_c(_DIM, 'BEFORE', plain=plain)}")
+    _type_col(_DIM, '    if ($score -gt 90) { Write-Output "Excellent" }',
+              delay=d, plain=plain)
+    pause(0.35, plain=plain, quick=quick)
+    print()
+    print(f"  {_c(_BOLD + _CYAN, 'WITH IXX', plain=plain)}")
+    for line in ["if score more than 90", '- say "Excellent"']:
+        _type_col(_CYAN, f"    {line}", delay=d, plain=plain)
+        pause(0.25, plain=plain, quick=quick)
+    print()
+    pause(0.40, plain=plain, quick=quick)
 
     if not quick:
-        code_block("Conditions", [
-            "score = 95",
-            "if score more than 90",
-            '- say "Excellent"',
-            "else",
-            '- say "Keep going"',
-        ], ["Excellent"], plain=plain)
-        pause(0.40, plain=plain)
+        # Comparison 2: try/catch
+        print(f"  {_c(_DIM, 'BEFORE', plain=plain)}")
+        for line in [
+            "try:",
+            '    content = open("config.txt").read()',
+            "except Exception as e:",
+            "    print(e)",
+        ]:
+            _type_col(_DIM, f"    {line}", delay=d, plain=plain)
+        pause(0.35, plain=plain)
+        print()
+        print(f"  {_c(_BOLD + _CYAN, 'WITH IXX', plain=plain)}")
+        for line in [
+            "try",
+            '- content = read("config.txt")',
+            "catch",
+            '- say "Could not read: {error}"',
+        ]:
+            _type_col(_CYAN, f"    {line}", delay=d, plain=plain)
+            pause(0.20, plain=plain)
+        print()
+        pause(0.55, plain=plain)
 
-    code_block("Functions", [
+
+def _section_functions(*, plain: bool = False, quick: bool = False) -> None:
+    _hr("FUNCTIONS", plain=plain)
+    d = 0.010 if quick else 0.022
+
+    print(f"  {_c(_DIM, 'CODE', plain=plain)}")
+    code = [
         "function double x",
         "- return x * 2",
         "",
-        "say double(21)",
-    ], ["42"], plain=plain)
-    pause(0.40, plain=plain)
+        "numbers = 3, 7, 21",
+        "say double(first(numbers))",
+        "say double(last(numbers))",
+    ]
+    for line in code:
+        if line:
+            _type_col(_CYAN, f"    {line}", delay=d, plain=plain)
+        else:
+            print()
 
-    if not quick:
-        code_block("File I/O and try / catch", [
-            "result = nothing",
-            "try",
-            '- result = read("config.txt")',
-            "catch",
-            '- say "Using defaults: {error}"',
-        ], None, plain=plain)
-        pause(0.40, plain=plain)
-
-
-def _section_validation(*, plain: bool = False) -> None:
-    print(_c(_BOLD, "  Fully validated"))
+    pause(0.50, plain=plain, quick=quick)
     print()
-    progress("Python unit tests",  "478 passed", plain=plain)
-    pause(0.12, plain=plain)
-    progress("StressTest files",   " 30 passed", plain=plain)
-    pause(0.12, plain=plain)
-    progress("IXX assertions",     "229 passed", plain=plain)
-    pause(0.12, plain=plain)
-    progress("Expected failures",  " 12 passed", plain=plain)
+    print(f"  {_c(_GREEN, 'OUTPUT', plain=plain)}")
+    for line in ["6", "42"]:
+        print(f"    {_c(_GREEN, line, plain=plain)}")
+    print()
+    pause(0.50, plain=plain, quick=quick)
+
+
+def _section_files_errors(*, plain: bool = False) -> None:
+    _hr("FILES + ERRORS", plain=plain)
+    d = 0.022
+
+    print(f"  {_c(_DIM, 'CODE', plain=plain)}")
+    code = [
+        'write "notes.txt", "IXX loaded."',
+        'append "notes.txt", "Session started."',
+        'lines = readlines("notes.txt")',
+        "say count(lines)",
+        "",
+        "result = nothing",
+        "try",
+        '- result = read("missing.txt")',
+        "catch",
+        '- say "Handled: {error}"',
+    ]
+    for line in code:
+        if line:
+            _type_col(_CYAN, f"    {line}", delay=d, plain=plain)
+        else:
+            print()
+
+    pause(0.50, plain=plain)
+    print()
+    print(f"  {_c(_GREEN, 'OUTPUT', plain=plain)}")
+    for line in ["2", "Handled: [file not found: missing.txt]"]:
+        print(f"    {_c(_GREEN, line, plain=plain)}")
+    print()
+    pause(0.50, plain=plain)
+
+
+def _section_system_commands(*, plain: bool = False, quick: bool = False) -> None:
+    _hr("SYSTEM COMMANDS", plain=plain)
+    d = 0.010 if quick else 0.022
+
+    cmds = [
+        ('ixx do "ram used"',  "Used:  15.2 GB"),
+        ('ixx do "cpu temp"',  "Temperature:  62 C"),
+        ('ixx do "wifi ip"',   "192.168.1.104"),
+    ] if not quick else [
+        ('ixx do "ram used"', "Used:  15.2 GB"),
+    ]
+
+    for cmd, output in cmds:
+        _type_col(_CYAN, f"  {cmd}", delay=d, plain=plain)
+        pause(0.20, plain=plain, quick=quick)
+        print(f"    {_c(_GREEN, output, plain=plain)}")
+        pause(0.30, plain=plain, quick=quick)
+        print()
+
+
+def _section_validation(*, plain: bool = False, quick: bool = False) -> None:
+    _hr("VALIDATION", plain=plain)
+
+    type_line("  running validation matrix...", delay=0.015, plain=plain)
+    pause(0.40, plain=plain, quick=quick)
+    print()
+
+    stats = [
+        ("unit tests",        "478 passed"),
+        ("stress files",      " 30 passed"),
+        ("IXX assertions",    "229 passed"),
+        ("expected failures", " 12 passed"),
+    ]
+    for label, value in stats:
+        _bar_line(label, value, plain=plain, quick=quick)
+        pause(0.10, plain=plain, quick=quick)
+    print()
+
+
+def _section_timeline(*, plain: bool = False) -> None:
+    _hr("TIMELINE", plain=plain)
+
+    milestones = [
+        ("v0.1", "language booted"),
+        ("v0.2", "interactive shell"),
+        ("v0.3", "system commands  (cpu, ram, gpu, disk, ip, wifi)"),
+        ("v0.4", "user-defined functions + return values"),
+        ("v0.5", "built-in library  (text, math, lists, color)"),
+        ("v0.6", "file I/O + try/catch + nothing literal"),
+    ]
+    for ver, desc in milestones:
+        print(f"  {_c(_CYAN + _BOLD, ver, plain=plain)}  {desc}")
+        pause(0.18, plain=plain)
     print()
 
 
 def _section_final(*, plain: bool = False) -> None:
     pause(0.45, plain=plain)
     print()
-    _type_colored(_BOLD + _CYAN, "  IXX", delay=0.10, plain=plain)
+    _type_col(_BOLD + _CYAN, "  IXX", delay=0.10, plain=plain)
     pause(0.20, plain=plain)
     type_line("  The computer, translated.", delay=0.022, plain=plain)
     print()
-    print(f"  {_c(_DIM, 'pip install ixx')}  -  {_c(_DIM, 'ixx help')}")
+    print(f"  {_c(_DIM, 'pip install ixx', plain=plain)}  -  "
+          f"{_c(_DIM, 'ixx help', plain=plain)}")
     print()
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+# ── Entry point ────────────────────────────────────────────────────────────────
 
 def run(mode: str = "default") -> None:
-    """Run the showoff presentation.
-
+    """
+    Run the showoff presentation.
     mode: "default" | "quick" | "full" | "plain"
     """
     plain = (mode == "plain")
     quick = (mode == "quick")
+    full  = (mode == "full")
 
-    _section_boot(plain=plain)
-
-    if not quick:
-        _section_features(plain=plain)
-
-    _section_code_examples(plain=plain, quick=quick)
+    _section_boot(plain=plain, quick=quick)
 
     if not quick:
-        _section_validation(plain=plain)
+        _section_slogans(plain=plain)
+
+    _section_before_after(plain=plain, quick=quick)
+    _section_functions(plain=plain, quick=quick)
+
+    if not quick:
+        _section_files_errors(plain=plain)
+        _section_system_commands(plain=plain, quick=quick)
+
+    _section_validation(plain=plain, quick=quick)
+
+    if full:
+        _section_timeline(plain=plain)
 
     _section_final(plain=plain)

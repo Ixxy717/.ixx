@@ -299,6 +299,15 @@ def run() -> None:
             _handle_update()
             continue
 
+        # ---- showoff ----
+        if first == "showoff":
+            from ..showoff import run as _showoff_run
+            sub = tokens[1] if len(tokens) > 1 else "default"
+            if sub not in ("default", "quick", "full", "plain"):
+                sub = "default"
+            _showoff_run(sub)
+            continue
+
         # ---- help / ? ----
         if first in ("help", "?") or (len(tokens) >= 2 and tokens[-1] in ("?", "help")):
             _handle_help(registry, tokens)

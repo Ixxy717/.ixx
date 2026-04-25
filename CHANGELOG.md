@@ -4,6 +4,15 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.2.2] — showoff upgrade: cinematic terminal trailer
+
+### Changed
+- **`ixx showoff` completely rewritten** — animated boot sequence, before/after comparisons, code reveals, fill-bar validation matrix, section headers, TIMELINE in full mode.
+- **`showoff` now works inside the IXX shell** (`ixx>` prompt).
+- 5 new tests; TestShowoff total: 21 passing.
+
+---
+
 ## [0.6.2.1] — showoff command, version release date
 
 ### Added
