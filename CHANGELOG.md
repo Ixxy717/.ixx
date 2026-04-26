@@ -4,6 +4,23 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.8.1] — 2026-04-26: REPL Multiline Fix + Clear Command
+
+### REPL multiline block entry (bug fix)
+
+- **Root cause** — The REPL relied on Lark `UnexpectedEOF` to enter continuation mode, but block-starting headers (`if`, `loop`, `function`, `try`, `catch`, `else`) raise `UnexpectedInput` for a bare header with no body. Continuation mode never triggered, so the next dash line could run standalone as unconditional code.
+- **Fix** — `_try_run_ixx` now performs explicit block-starter detection. When the first word of a line is a block keyword, the REPL immediately enters continuation mode and collects all body lines until a blank line is entered, then parses and runs the full accumulated block.
+- **Orphan dash guard** — A line starting with `-` typed outside of any active block now shows a friendly error ("This line starts with '-' but there is no block to attach it to.") instead of silently executing.
+- Affected patterns now work correctly in the REPL: `if/else`, `loop`, `loop each`, `function`, `try/catch`, and nested blocks.
+
+### New shell command: `clear` / `cls`
+
+- `clear` (and `cls` alias) clears the terminal screen without affecting REPL state, session variables, functions, or history.
+- Cross-platform: uses `cls` on Windows, `clear` on macOS/Linux.
+- Failure is silently swallowed — no raw exception if the terminal cannot be cleared.
+
+---
+
 ## [0.6.8] — 2026-04-26: Deep Audit Fixes (Letters A–V + Final Docs Batch)
 
 ### Crash hardening / raw-exception elimination

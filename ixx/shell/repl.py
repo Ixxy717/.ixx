@@ -82,6 +82,49 @@ def _safe_write_history() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Block-starter helpers
+# ---------------------------------------------------------------------------
+
+# Keywords that open a new indented block in IXX.  When the REPL sees one of
+# these as the first word on a line it must NOT try to parse immediately —
+# the block body hasn't been typed yet.  Instead it enters continuation mode
+# right away and waits for a blank line before submitting.
+_BLOCK_STARTERS: frozenset[str] = frozenset({
+    "if", "else", "loop", "function", "try", "catch",
+})
+
+
+def _is_block_start(line: str) -> bool:
+    """Return True if *line* opens an IXX block (if/else/loop/function/try/catch)."""
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return False
+    first = stripped.split()[0].lower()
+    return first in _BLOCK_STARTERS
+
+
+def _is_orphan_dash(line: str) -> bool:
+    """Return True if *line* starts with '-' (a block body line with no header)."""
+    return line.strip().startswith("-")
+
+
+# ---------------------------------------------------------------------------
+# Clear-screen helper
+# ---------------------------------------------------------------------------
+
+def _handle_clear() -> None:
+    """Clear the terminal screen without affecting REPL state or history."""
+    import os
+    try:
+        if sys.platform == "win32":
+            os.system("cls")
+        else:
+            os.system("clear")
+    except Exception:
+        pass  # Silent no-op if the terminal can't be cleared
+
+
+# ---------------------------------------------------------------------------
 # Tokeniser
 # ---------------------------------------------------------------------------
 
@@ -188,11 +231,22 @@ def _try_run_ixx(first_line: str, prompt_fn, interpreter=None) -> bool:
 
     Returns True if the input was recognised as IXX (even if it errored).
     Returns False if it definitely is not IXX (so caller can show "unknown command").
+
+    Block-starter detection:
+      Lines that open an IXX block (if/else/loop/function/try/catch) enter
+      continuation mode immediately — we do NOT try to parse just the header,
+      because the grammar requires a body and raises UnexpectedInput (not
+      UnexpectedEOF) for a bare header.  Continuation lines are collected until
+      the user types a blank line, then the full source is parsed and executed.
+
+    Orphan dash guard:
+      A line starting with '-' outside of continuation mode is a block body
+      line with no header.  We show a friendly error instead of letting it
+      execute unconditionally.
     """
     import os
     from ..parser import parse
     from ..interpreter import Interpreter, IXXRuntimeError
-    from ..preprocessor import preprocess
     from ..modules import resolve_imports, IXXImportError
     from lark.exceptions import UnexpectedInput, UnexpectedEOF
 
@@ -213,8 +267,37 @@ def _try_run_ixx(first_line: str, prompt_fn, interpreter=None) -> bool:
         else:
             Interpreter().run(program, imported)
 
-    lines = [first_line]
+    # ------------------------------------------------------------------
+    # Orphan dash guard: a body line with no header must not run alone.
+    # ------------------------------------------------------------------
+    if _is_orphan_dash(first_line):
+        print("  ixx: This line starts with '-' but there is no block to attach it to.")
+        return True  # handled — don't fall through to "unknown command"
 
+    lines = [first_line]
+    stripped = first_line.strip()
+    first_token = stripped.split()[0].lower() if stripped else ""
+
+    # ------------------------------------------------------------------
+    # Block-starter: collect all body lines before attempting to parse.
+    # Relying on UnexpectedEOF is wrong for block headers — the parser
+    # raises UnexpectedInput for a bare header like "if x more than 10".
+    # ------------------------------------------------------------------
+    if first_token in _BLOCK_STARTERS:
+        while True:
+            try:
+                cont = prompt_fn("... ")
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return True
+            if cont.strip() == "":
+                break  # blank line → done collecting; fall through to parse
+            lines.append(cont)
+        # Fall through to the parse/execute loop with the full block source.
+
+    # ------------------------------------------------------------------
+    # Parse / execute loop (also handles UnexpectedEOF for nested blocks).
+    # ------------------------------------------------------------------
     while True:
         source = "\n".join(lines)
         try:
@@ -231,15 +314,14 @@ def _try_run_ixx(first_line: str, prompt_fn, interpreter=None) -> bool:
                 print(f"\n  {label}: {e}\n")
             return True
         except UnexpectedEOF:
-            # Incomplete — ask for more input
+            # Still incomplete after collecting (e.g. nested block needs more).
             try:
                 cont = prompt_fn("... ")
             except (EOFError, KeyboardInterrupt):
                 print()
                 return True
             if cont.strip() == "":
-                # Blank continuation — attempt to run what we have; show
-                # a friendly message on failure instead of swallowing it.
+                # Blank line after incomplete source — show friendly error.
                 try:
                     program = parse(source)
                     _run_program(program)
@@ -254,7 +336,6 @@ def _try_run_ixx(first_line: str, prompt_fn, interpreter=None) -> bool:
         except UnexpectedInput:
             # Definite parse error — report as IXX only when the first token
             # looks like IXX syntax, not a shell command typo.
-            first_token = first_line.strip().split()[0].lower() if first_line.strip() else ""
             is_assignment = "=" in first_line and not first_line.strip().startswith("#")
             if first_token in _IXX_STARTERS or is_assignment:
                 print("  ixx: syntax error — check your code")
@@ -363,6 +444,11 @@ def run() -> None:
         if first in ("exit", "quit"):
             print("\nGoodbye.\n")
             break
+
+        # ---- clear / cls ----
+        if first in ("clear", "cls"):
+            _handle_clear()
+            continue
 
         # ---- update ----
         if first == "update":

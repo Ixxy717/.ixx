@@ -4348,5 +4348,336 @@ class TestLetterV(unittest.TestCase):
                         f"Expected error on line 1, got: {error_lines}")
 
 
+class TestReplMultiline(unittest.TestCase):
+    """REPL multiline block entry — block-starter detection and orphan dash guard."""
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _make_prompt(self, lines: list):
+        """Return a prompt function that yields *lines* then raises EOFError."""
+        it = iter(lines)
+
+        def _prompt(p):
+            try:
+                return next(it)
+            except StopIteration:
+                raise EOFError()
+
+        return _prompt
+
+    def _run_block(self, header, body_lines, setup=None, interpreter=None):
+        """
+        Feed *header* + *body_lines* + blank-line into ``_try_run_ixx``.
+
+        If *setup* is provided it is run first (single-line IXX on *interpreter*).
+        Returns (stdout_text, interpreter).
+        """
+        import io, contextlib
+        from ixx.shell.repl import _try_run_ixx
+        from ixx.interpreter import Interpreter
+
+        if interpreter is None:
+            interpreter = Interpreter()
+
+        # Optional setup lines (plain single-line IXX)
+        if setup:
+            for setup_line in ([setup] if isinstance(setup, str) else setup):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    _try_run_ixx(setup_line, lambda p: "", interpreter)
+
+        # body_lines + blank line terminates collection
+        prompt_fn = self._make_prompt(body_lines + [""])
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _try_run_ixx(header, prompt_fn, interpreter)
+
+        return buf.getvalue(), interpreter
+
+    # ------------------------------------------------------------------
+    # 1. if-false block does not run body
+    # ------------------------------------------------------------------
+
+    def test_if_false_no_output(self):
+        """if false: body must not run."""
+        out, _ = self._run_block(
+            "if 1 more than 10",
+            ['- say "big"'],
+        )
+        self.assertNotIn("big", out)
+
+    # ------------------------------------------------------------------
+    # 2. if-true block runs body
+    # ------------------------------------------------------------------
+
+    def test_if_true_runs_body(self):
+        """if true: body runs."""
+        out, _ = self._run_block(
+            "if 15 more than 10",
+            ['- say "big"'],
+        )
+        self.assertIn("big", out)
+
+    # ------------------------------------------------------------------
+    # 3. Function block defines function and persists in session
+    # ------------------------------------------------------------------
+
+    def test_function_definition_and_call(self):
+        """function block defines a function that persists in the session."""
+        import io, contextlib
+        from ixx.shell.repl import _try_run_ixx
+        from ixx.interpreter import Interpreter
+
+        interp = Interpreter()
+
+        self._run_block(
+            "function double x",
+            ["- return x * 2"],
+            interpreter=interp,
+        )
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _try_run_ixx("say double(21)", lambda p: "", interp)
+        self.assertIn("42", buf.getvalue())
+
+    # ------------------------------------------------------------------
+    # 4. Loop block works
+    # ------------------------------------------------------------------
+
+    def test_loop_block(self):
+        """loop block runs the correct number of iterations."""
+        out, _ = self._run_block(
+            "loop n more than 0",
+            ["- say n", "- n = n - 1"],
+            setup="n = 3",
+        )
+        self.assertIn("3", out)
+        self.assertIn("2", out)
+        self.assertIn("1", out)
+        self.assertNotIn("0", out)
+
+    # ------------------------------------------------------------------
+    # 5. Loop-each block works
+    # ------------------------------------------------------------------
+
+    def test_loop_each_block(self):
+        """loop each block iterates over list items."""
+        out, _ = self._run_block(
+            "loop each item in items",
+            ["- say item"],
+            setup='items = "a", "b", "c"',
+        )
+        self.assertIn("a", out)
+        self.assertIn("b", out)
+        self.assertIn("c", out)
+
+    # ------------------------------------------------------------------
+    # 6. Try/catch block works
+    # ------------------------------------------------------------------
+
+    def test_try_catch_block(self):
+        """try/catch block catches a runtime error and runs catch body."""
+        out, _ = self._run_block(
+            "try",
+            ['- x = number("bad")', "catch", '- say "caught"', "- say error"],
+        )
+        self.assertIn("caught", out)
+        self.assertIn("bad", out)
+
+    # ------------------------------------------------------------------
+    # 7. Nested if block works
+    # ------------------------------------------------------------------
+
+    def test_nested_if_block(self):
+        """Nested if block (two-level dash indent) runs correctly."""
+        out, _ = self._run_block(
+            "if x more than 0",
+            ["- if x less than 5", '-- say "inside"'],
+            setup="x = 3",
+        )
+        self.assertIn("inside", out)
+
+    def test_nested_if_false_outer_no_inner_output(self):
+        """Outer if false → inner body must not run."""
+        out, _ = self._run_block(
+            "if x more than 10",
+            ["- if x less than 5", '-- say "inside"'],
+            setup="x = 3",
+        )
+        self.assertNotIn("inside", out)
+
+    # ------------------------------------------------------------------
+    # 8. Orphan dash line does not execute; shows friendly error
+    # ------------------------------------------------------------------
+
+    def test_orphan_dash_shows_error_not_output(self):
+        """Orphan '-' line shows friendly error instead of executing body."""
+        import io, contextlib
+        from ixx.shell.repl import _try_run_ixx
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = _try_run_ixx('- say "big"', lambda p: "")
+        out = buf.getvalue()
+        self.assertTrue(result, "Should return True (handled)")
+        self.assertIn("no block", out.lower())
+        self.assertNotIn("big", out)
+
+    def test_orphan_double_dash_shows_error(self):
+        """Double-dash orphan line also gives a friendly message, no execution."""
+        import io, contextlib
+        from ixx.shell.repl import _try_run_ixx
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _try_run_ixx('-- say "nested"', lambda p: "")
+        out = buf.getvalue()
+        self.assertNotIn("nested", out)
+
+    # ------------------------------------------------------------------
+    # 9. Old single-line REPL persistence still works
+    # ------------------------------------------------------------------
+
+    def test_single_line_assignment_persists(self):
+        """Single-line variable assignment persists across subsequent lines."""
+        import io, contextlib
+        from ixx.shell.repl import _try_run_ixx
+        from ixx.interpreter import Interpreter
+
+        interp = Interpreter()
+        _try_run_ixx('name = "Ixxy"', lambda p: "", interp)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _try_run_ixx("say name", lambda p: "", interp)
+        self.assertIn("Ixxy", buf.getvalue())
+
+    # ------------------------------------------------------------------
+    # 10. if/else collected as one block
+    # ------------------------------------------------------------------
+
+    def test_if_else_false_branch(self):
+        """if/else block — false branch: else body runs."""
+        out, _ = self._run_block(
+            "if x more than 10",
+            ['- say "big"', "else", '- say "small"'],
+            setup="x = 3",
+        )
+        self.assertNotIn("big", out)
+        self.assertIn("small", out)
+
+    def test_if_else_true_branch(self):
+        """if/else block — true branch runs, else does not."""
+        out, _ = self._run_block(
+            "if x more than 10",
+            ['- say "big"', "else", '- say "small"'],
+            setup="x = 15",
+        )
+        self.assertIn("big", out)
+        self.assertNotIn("small", out)
+
+    # ------------------------------------------------------------------
+    # 11. _is_block_start helper
+    # ------------------------------------------------------------------
+
+    def test_is_block_start_recognises_keywords(self):
+        """_is_block_start returns True for all block-starting keywords."""
+        from ixx.shell.repl import _is_block_start
+        for kw in (
+            "if x more than 5", "else", "loop n more than 0",
+            "loop each item in items", "function double x", "try", "catch",
+        ):
+            self.assertTrue(_is_block_start(kw), f"Expected True for: {kw!r}")
+
+    def test_is_block_start_rejects_normal_lines(self):
+        """_is_block_start returns False for non-block lines."""
+        from ixx.shell.repl import _is_block_start
+        for line in ("x = 5", 'say "hi"', "# comment", "", "name = function_name"):
+            self.assertFalse(_is_block_start(line), f"Expected False for: {line!r}")
+
+
+class TestReplClear(unittest.TestCase):
+    """clear / cls shell meta-command tests."""
+
+    def test_clear_callable_without_error(self):
+        """_handle_clear() runs without raising."""
+        from ixx.shell.repl import _handle_clear
+        import unittest.mock
+        with unittest.mock.patch("os.system"):
+            try:
+                _handle_clear()
+            except Exception as exc:
+                self.fail(f"_handle_clear() raised: {exc}")
+
+    def test_clear_calls_os_system_once(self):
+        """_handle_clear() calls os.system exactly once."""
+        from ixx.shell.repl import _handle_clear
+        import unittest.mock
+        with unittest.mock.patch("os.system") as mock_sys:
+            _handle_clear()
+        mock_sys.assert_called_once()
+
+    def test_cls_alias_in_run_source(self):
+        """The run() main loop handles both 'clear' and 'cls'."""
+        import inspect
+        from ixx.shell import repl
+        src = inspect.getsource(repl.run)
+        self.assertIn('"cls"', src)
+        self.assertIn('"clear"', src)
+
+    def test_clear_does_not_reset_interpreter_state(self):
+        """clear does not wipe variables from the session interpreter."""
+        import io, contextlib, unittest.mock
+        from ixx.shell.repl import _try_run_ixx, _handle_clear
+        from ixx.interpreter import Interpreter
+
+        interp = Interpreter()
+        _try_run_ixx('name = "Ixxy"', lambda p: "", interp)
+
+        with unittest.mock.patch("os.system"):
+            _handle_clear()
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _try_run_ixx("say name", lambda p: "", interp)
+        self.assertIn("Ixxy", buf.getvalue())
+
+    def test_clear_followed_by_block_still_works(self):
+        """Calling _handle_clear() then running a block works normally."""
+        import io, contextlib, unittest.mock
+        from ixx.shell.repl import _try_run_ixx, _handle_clear
+        from ixx.interpreter import Interpreter
+
+        interp = Interpreter()
+        with unittest.mock.patch("os.system"):
+            _handle_clear()
+
+        lines_it = iter(["- say x", ""])
+
+        def mock_prompt(p):
+            return next(lines_it)
+
+        # x is not defined → IXX runtime error; just must not crash hard
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _try_run_ixx("if x more than 0", mock_prompt, interp)
+        # Should not propagate a raw Python exception
+        self.assertNotIn("Traceback", buf.getvalue())
+
+    def test_clear_failure_no_exception(self):
+        """If os.system raises, _handle_clear() swallows it silently."""
+        from ixx.shell.repl import _handle_clear
+        import unittest.mock
+        with unittest.mock.patch(
+            "os.system", side_effect=Exception("terminal error")
+        ):
+            try:
+                _handle_clear()
+            except Exception:
+                self.fail("_handle_clear() should not propagate exceptions")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
