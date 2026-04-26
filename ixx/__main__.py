@@ -73,9 +73,9 @@ Booleans:     YES  |  NO
 Blocks:       - one level  |  -- two levels  |  --- three levels
 
 Examples:
-  ixx examples\\hello.ixx
-  ixx run examples\\condition.ixx
-  ixx check examples\\advanced.ixx
+  ixx examples/hello.ixx
+  ixx run examples/condition.ixx
+  ixx check examples/advanced.ixx
   ixx version
   ixx help
 """.strip()
@@ -145,6 +145,14 @@ def _friendly_message(orig_line: str, col: int | None, e: Exception) -> str:
     else:
         text_before = orig_line.rstrip()
 
+    # I5: function keyword with no name
+    stripped = orig_line.strip()
+    if re.match(r'^function\s*$', stripped):
+        return (
+            "Expected a function name after 'function'.\n"
+            "  Example:  function add a, b"
+        )
+
     # Detect incomplete comparison phrases (longest-first to avoid "is" matching "is not")
     for phrase, example in _INCOMPLETE_COMPARISONS:
         if text_before.endswith(phrase):
@@ -152,6 +160,18 @@ def _friendly_message(orig_line: str, col: int | None, e: Exception) -> str:
                 f'Expected a value after "{phrase}".\n'
                 f'  Example:  {example}'
             )
+
+    # I3: indentation/block depth errors
+    token_type = str(getattr(getattr(e, "token", None), "type", ""))
+    if token_type in ("_INDENT", "_DEDENT", "INDENT", "DEDENT", "NL", "_NEWLINE", "NEWLINE"):
+        if token_type in ("_INDENT", "_DEDENT", "INDENT", "DEDENT"):
+            return (
+                "Check your indentation — each level needs one more dash than the one above"
+                " (-, --, ---).\n"
+                "  Make sure you have not skipped a level."
+            )
+        # _NEWLINE / NL as unexpected token means line ended unexpectedly
+        return "This line does not seem complete. Check for a missing value or keyword."
 
     # Convert Lark token names to friendly labels
     expected_raw = (
@@ -165,6 +185,16 @@ def _friendly_message(orig_line: str, col: int | None, e: Exception) -> str:
         if name in _TOKEN_FRIENDLY:
             friendly.add(_TOKEN_FRIENDLY[name])
         # Internal / anonymous tokens are silently skipped
+
+    # I3: if only indentation tokens were expected, give the dash hint
+    indent_tokens = {"_INDENT", "_DEDENT", "_NEWLINE", "INDENT", "DEDENT", "NL", "NEWLINE"}
+    non_indent = set(str(t).strip("'\"") for t in expected_raw) - indent_tokens
+    if not non_indent and expected_raw:
+        return (
+            "Check your indentation — each level needs one more dash than the one above"
+            " (-, --, ---).\n"
+            "  Make sure you have not skipped a level."
+        )
 
     if friendly:
         parts = sorted(friendly)
@@ -202,6 +232,21 @@ def _format_syntax_error(path: str, source: str, e: Exception) -> None:
     print(f"\n{msg}", file=sys.stderr)
 
 
+def _apply_line_map(errors: list, source: str) -> None:
+    """Correct checker error line numbers from preprocessed to original source lines.
+
+    The preprocessor strips blank lines before parsing, so AST token line
+    numbers reflect the condensed source.  This function remaps each error's
+    line number back to the original file line the user sees in their editor.
+    Errors with no line (line=None) are left unchanged.
+    """
+    from .preprocessor import preprocess_with_map
+    _, line_map = preprocess_with_map(source)
+    for err in errors:
+        if err.line is not None:
+            err.line = line_map.get(err.line, err.line)
+
+
 def _run_file(path: str, check_only: bool = False) -> None:
     if not os.path.isfile(path):
         from .shell.renderer import show_error
@@ -227,8 +272,9 @@ def _run_file(path: str, check_only: bool = False) -> None:
         _format_syntax_error(path, source, e)
         sys.exit(1)
     except Exception as e:
-        print(f"ixx: parse error in {path}:", file=sys.stderr)
-        print(f"  {e}", file=sys.stderr)
+        print(f"ixx: parse error in {path}", file=sys.stderr)
+        print("  Something unexpected went wrong while parsing.", file=sys.stderr)
+        print("  Check your file for unusual characters or encoding issues.", file=sys.stderr)
         sys.exit(1)
 
     base_dir = os.path.dirname(os.path.abspath(path))
@@ -247,6 +293,7 @@ def _run_file(path: str, check_only: bool = False) -> None:
     if check_only:
         from .checker import SemanticChecker
         errors = SemanticChecker().check(program, path, imported_funcs)
+        _apply_line_map(errors, source)
         hard_errors = [e for e in errors if e.severity == "error"]
         if hard_errors:
             print(f"ixx: check failed in {path}", file=sys.stderr)
@@ -258,7 +305,7 @@ def _run_file(path: str, check_only: bool = False) -> None:
             if e.severity == "warning":
                 loc = f" (line {e.line})" if e.line else ""
                 print(f"  warning: {e.message}{loc}", file=sys.stderr)
-        print(f"ixx: {path} - syntax OK")
+        print(f"ixx: {path} - check passed")
         return
 
     try:
@@ -311,7 +358,9 @@ def _check_file_json(path: str) -> None:
         sys.exit(1)
     except Exception as e:
         _emit(False, [{"file": path, "line": None, "column": None,
-                       "severity": "error", "message": str(e)}])
+                       "severity": "error",
+                       "message": "Something unexpected went wrong while parsing. "
+                                  "Check your file for unusual characters or encoding issues."}])
         sys.exit(1)
 
     base_dir = os.path.dirname(os.path.abspath(path))
@@ -324,6 +373,7 @@ def _check_file_json(path: str) -> None:
 
     from .checker import SemanticChecker
     errors = SemanticChecker().check(program, path, imported_funcs)
+    _apply_line_map(errors, source)
     hard_errors = [e for e in errors if e.severity == "error"]
     if hard_errors:
         _emit(False, [err.as_dict() for err in errors])

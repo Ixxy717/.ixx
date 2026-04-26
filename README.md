@@ -358,9 +358,9 @@ To associate `.ixx` files with the IXX icon on Windows, see
 
 - Requires Python 3.11+ and the `lark` library.
 - Variable names must be single words (no spaces).
-- String literals do not process escape sequences (`"\n"` is literally backslash-n).
 - Shell system commands are Windows-first; Linux/macOS adapters are planned.
 - Destructive commands (`delete`, `kill process`, `copy`, `move`) exist in the guidance tree but do not execute yet.
+- Expressions must fit on one line — multi-line expressions are not supported.
 
 ---
 
@@ -384,22 +384,34 @@ The prototype ships with two test suites.
 python -m unittest discover -s tests -p "test*.py"
 ```
 
-**507 tests passing** across: language basics, strings, numbers, booleans, conditions, dash blocks, loops, lists, comparisons, `contains`, logic, functions, built-ins (text/math/lists/color/file I/O), `try`/`catch`, `nothing`, scoping, error handling, CLI commands, shell guidance, command handlers, path aliases, format helpers, system commands, and `showoff` presentation.
+Several hundred tests passing across: language basics, strings, numbers, booleans, conditions, dash blocks, loops, lists, comparisons, `contains`, logic, functions, built-ins (text/math/lists/color/file I/O), `try`/`catch`, `nothing`, scoping, error handling, CLI commands, shell guidance, command handlers, path aliases, format helpers, system commands, and `showoff` presentation.
 
 ### End-to-end StressTest suite
 
+Three suites — all must pass before publishing a new version:
+
 ```
-StressTest\run-all.cmd
+StressTest\run-all.cmd               normal suite
+StressTest\Hard\run-hard.cmd         hard suite
+StressTest\Scenario\run-scenario.cmd scenario suite
 ```
 
-A manual CLI suite that runs 30 positive `.ixx` stress tests plus 12 ExpectedFailure scripts against the installed `ixx` command. Tests cover every language feature end-to-end. Temp files are written to `StressTest\tmp\` and cleaned between runs.
+**Normal suite** — positive `.ixx` scripts that should run cleanly, plus:
+- `ExpectedFailures/` — scripts that should exit with an error (they *pass* the gate when they fail correctly)
+- `CheckJson/` — scripts run under `ixx check --json`; tests verify specific errors or warnings appear in the JSON output
 
-**Release gate:** both suites must pass before publishing a new version:
+**Hard suite** — more complex multi-feature tests, edge cases, and stress scenarios.
+
+**Scenario suite** — real-world usage scenarios combining multiple language features.
+
+**Release gate:** all suites must pass before publishing:
 
 | Suite | Expected result |
 |---|---|
 | `python -m unittest discover` | 0 failures, 0 errors |
 | `StressTest\run-all.cmd` | FILE FAIL: 0 / ASSERT FAIL: 0 / EXPECTED FAIL FAIL: 0 |
+| `StressTest\Hard\run-hard.cmd` | all pass |
+| `StressTest\Scenario\run-scenario.cmd` | all pass |
 
 ---
 

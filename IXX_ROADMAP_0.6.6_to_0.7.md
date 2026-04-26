@@ -19,11 +19,13 @@ You’ll still send plans, repo zips, logs, and test output. The process stays t
 
 | Version | Focus |
 |---|---|
-| 0.6.6 | `loop each item in items` |
-| 0.6.7 | `empty list` + `put item into list` |
-| 0.6.8 | `run("native command")` and native passthrough in scripts |
-| 0.6.9 | Better interactive IXX shell |
-| 0.6.10 | `ixxterm` launcher + Windows integration |
+| 0.6.6 | `loop each item in items` ✅ |
+| 0.6.7 | Bug & Edge Case Audit ✅ |
+| 0.6.8 | Deep Audit Fixes (A–V) ✅ |
+| 0.6.9 | `empty list` + `put item into list` |
+| 0.6.10 | `run("native command")` and native passthrough |
+| 0.6.11 | Better interactive IXX shell |
+| 0.6.12 | `ixxterm` launcher + Windows integration |
 | 0.7 candidate | Real local scripting shell milestone |
 
 ## Guiding Rule
@@ -291,7 +293,24 @@ CheckJson:
 
 ---
 
-# v0.6.7 — List Building / Accumulation
+# v0.6.7 — Bug & Edge Case Audit ✅ (completed)
+
+v0.6.7 was used for a broad bug and edge-case audit rather than list building.
+List building (`empty list` + `put into`) is planned for v0.6.9.
+
+---
+
+# v0.6.8 — Deep Audit Fixes (A–V) ✅ (completed)
+
+v0.6.8 was used for a systematic set of deep audit fixes (letters A through V),
+covering crash paths, error message quality, number display, REPL persistence,
+checker quality, and documentation.
+
+Native command execution (`run()`) is planned for v0.6.10.
+
+---
+
+# v0.6.9 — List Building / Accumulation
 
 ## Headline
 
@@ -520,11 +539,11 @@ Hard/Scenario additions:
 - New list-building tests green.
 - No mutation/scoping leaks.
 - Docs match behavior.
-- Version is `0.6.7`, not `0.7`.
+- Version is `0.6.9`, not `0.7`.
 
 ---
 
-# v0.6.8 — Native Command Execution in Scripts
+# v0.6.10 — Native Command Execution in Scripts
 
 ## Headline
 
@@ -733,11 +752,11 @@ Scenario update:
 - New `run()` tests pass.
 - Docs clearly separate `do()` vs `run()`.
 - Native commands do not execute during imports/checking.
-- Version is `0.6.8`, not `0.7`.
+- Version is `0.6.10`, not `0.7`.
 
 ---
 
-# v0.6.9 — Better Interactive IXX Shell
+# v0.6.11 — Better Interactive IXX Shell
 
 ## Headline
 
@@ -892,11 +911,11 @@ Update:
 - Shell can `cd`, `pwd`, `clear`, and `history`.
 - `!` passthrough works.
 - No accidental native command execution without `!`.
-- Version is `0.6.9`, not `0.7`.
+- Version is `0.6.11`, not `0.7`.
 
 ---
 
-# v0.6.10 — Windows Integration / Launcher
+# v0.6.12 — Windows Integration / Launcher
 
 ## Headline
 
@@ -1035,7 +1054,7 @@ Manual tests:
 - It launches IXX shell.
 - Docs explain Win+R and Explorer use.
 - Existing `ixx` command still works.
-- Version is `0.6.10` unless this becomes the actual `0.7` milestone.
+- Version is `0.6.12` unless this becomes the actual `0.7` milestone.
 
 ---
 
@@ -1202,10 +1221,12 @@ Before `ixxterm`, verify:
 ## Final Compact Map
 
 ```text
-0.6.6  loop each
-0.6.7  empty list + put into
-0.6.8  run()
-0.6.9  better ixx shell
-0.6.10 ixxterm / Windows integration
+0.6.6  loop each              ✅ done
+0.6.7  bug & edge case audit  ✅ done
+0.6.8  deep audit fixes A–V   ✅ done
+0.6.9  empty list + put into
+0.6.10 run() native passthrough
+0.6.11 better ixx shell
+0.6.12 ixxterm / Windows integration
 0.7    real local scripting shell milestone
 ```

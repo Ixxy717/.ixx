@@ -1,7 +1,7 @@
-# stdlib.ixx - IXX v0.5 built-in functions
+# stdlib.ixx - IXX built-in functions demo
 # Run with: ixx examples\stdlib.ixx
 
-say color("bold", "IXX v0.5 Built-in Functions")
+say color("bold", "IXX Built-in Functions")
 say "-------------------------------------------"
 say ""
 

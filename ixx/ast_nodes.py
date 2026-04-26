@@ -26,6 +26,7 @@ class FloatLit:
 @dataclass
 class StrLit:
     value: str
+    line: int | None = None
 
 @dataclass
 class BoolLit:

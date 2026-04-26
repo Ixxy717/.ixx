@@ -612,10 +612,10 @@ def _section_validation(*, plain: bool = False, quick: bool = False) -> None:
     print()
 
     stats = [
-        ("Python unit tests",  "478 passed"),
-        ("StressTest files",   " 30 passed"),
-        ("IXX assertions",     "229 passed"),
-        ("Expected failures",  " 12 passed"),
+        ("Python unit tests",  "hundreds passing"),
+        ("StressTest suite",   "normal + hard + scenario"),
+        ("IXX assertions",     "all passing"),
+        ("Expected failures",  "all passing"),
     ]
     for label, value in stats:
         _bar_line(label, value, plain=plain, quick=quick)

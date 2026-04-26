@@ -38,7 +38,8 @@ All IXX commands are run from any terminal (PowerShell, CMD, bash, etc.) after
 | `ixx shell` | Open the interactive IXX shell (explicit) |
 | `ixx <file.ixx>` | Run an `.ixx` script |
 | `ixx run <file.ixx>` | Run an `.ixx` script (explicit form) |
-| `ixx check <file.ixx>` | Parse the script and report syntax errors; does NOT run it |
+| `ixx check <file.ixx>` | Parse the script and report syntax and semantic errors; does NOT run it |
+| `ixx check <file.ixx> --json` | Same, but output machine-readable JSON (used by editor extensions) |
 | `ixx version` | Print the installed IXX version |
 | `ixx help` | Print the help overview |
 | `ixx demo` | Run the bundled `try-it.ixx` demo script |
@@ -141,8 +142,16 @@ Rules:
 - Only `{identifier}` syntax is supported — no expressions inside braces.
 - If the variable is not defined, `{?name}` is shown in the output and a warning
   is printed to stderr. The script continues without crashing.
-- String literals do **not** process escape sequences. `"\n"` is literally
-  backslash-n, not a newline character.
+- String literals support three escape sequences: `\n` (newline), `\t` (tab),
+  and `\\` (backslash). All other `\x` sequences are passed through as-is.
+- **IXX literal keywords** (`YES`, `NO`, `nothing`) can be used directly inside
+  `{}` — they substitute their display value without a variable lookup or warning:
+
+```
+say "Flag: {YES}"       # Flag: YES
+say "Flag: {NO}"        # Flag: NO
+say "Value: {nothing}"  # Value: nothing
+```
 
 ---
 
@@ -170,6 +179,10 @@ applies these display rules:
 | string `"hello"` | `hello` |
 | int `42` | `42` |
 | float `3.14` | `3.14` |
+
+**Clean number display:** IXX suppresses trailing `.0` and excess IEEE 754
+decimal digits.  `10 / 2` displays as `5` (not `5.0`), and `0.1 + 0.2`
+displays as `0.3`.  Up to 10 significant figures are shown when needed.
 
 ---
 
@@ -285,6 +298,17 @@ if msg contains "World"
 `not` applied to `nothing`: `YES`.
 `not` applied to `0` or `""`: `YES`.
 
+**Short-circuit evaluation:** `and` and `or` only evaluate the right side when
+necessary.  For `and`, the right side is skipped when the left is false.  For
+`or`, the right side is skipped when the left is true.
+
+```
+if exists("config.txt") and read("config.txt") contains "ready"
+- say "Ready"
+```
+
+In this example, `read()` is only called when the file exists.
+
 ---
 
 ## 8. Control flow
@@ -315,6 +339,25 @@ else
 Conditions are any expression that is truthy or falsy (see display rules table for
 what is falsy: `NO`, `nothing`, `0`, `0.0`, `""`, empty list).
 
+A condition can be a single variable — no comparison operator needed:
+
+```
+active = YES
+if active
+- say "Account is active"
+
+name = "Ixxy"
+if name
+- say "Name is set"
+
+items = "a", "b"
+if items
+- say "List is not empty"
+```
+
+`YES`, non-zero numbers, non-empty text, and non-empty lists are true.
+`NO`, `0`, `""`, `nothing`, and empty lists are false.
+
 ---
 
 ## 9. Loops
@@ -334,11 +377,9 @@ There is no built-in `break` or `continue`. Use a flag variable to exit early:
 
 ```
 found = NO
-i = 0
-loop i less than count(items) and found is NO
-- if items[i] is target      # note: index access not yet in language
+loop each item in items
+- if item is target
 -- found = YES
-- i = i + 1
 ```
 
 **Note:** Infinite loops are possible if the condition never becomes false.
@@ -447,6 +488,19 @@ function done
 Return exits the function immediately. Code after `return` in the same block is
 not executed.
 
+**Returning a list literal** — multiple comma-separated values create a list:
+
+```
+function get_sizes
+- return 100, 200, 300
+
+sizes = get_sizes()
+say count(sizes)    # 3
+say first(sizes)    # 100
+```
+
+Top-level `return` (outside any function) is a static error caught by `ixx check`.
+
 ### Scope
 
 - Parameters are local to the function.
@@ -456,6 +510,19 @@ not executed.
   variable of the same name would shadow them).
 - Two-pass collection: all functions in a file are collected before execution
   begins, so you can call a function that is defined later in the file.
+
+### Builtin shadowing
+
+Assigning a variable at the top level with the same name as a built-in
+(`count`, `text`, `type`, `number`, `round`, `abs`, `min`, `max`, etc.)
+triggers a `ixx check` warning:
+
+```
+count = 5   # warning: 'count' shadows the built-in 'count'. Rename it to avoid confusion.
+```
+
+This is a warning, not an error — the code still runs. Choose a different name
+to avoid accidental shadowing (e.g. `item_count = 5`).
 
 ### Recursion
 
@@ -528,9 +595,9 @@ position, space-separated in statement position.
 |---|---|---|---|
 | `count(x)` | list or text | number | Items in a list, or characters in text |
 | `text(x)` | any | text | Converts any value to its text representation |
-| `number(x)` | text or number | number | Converts text to a number; runtime error if not numeric |
+| `number(x)` | text or number | number | Converts text to a number; runtime error if not numeric. `number("inf")` and `number("nan")` are also runtime errors |
 | `type(x)` | any | text | Returns the IXX type name: `text`, `number`, `bool`, `list`, `nothing`. `type(YES)` returns `"bool"` — this is intentional |
-| `ask(prompt)` | text (optional) | text | Prompts the user for input; returns what they typed |
+| `ask(prompt)` | text (optional) | text | Prompts the user for input; returns what they typed. Works with piped stdin. If input is closed (EOF), raises a runtime error — wrap in `try/catch` to handle |
 
 ```
 say count("hello")          # 5
@@ -553,6 +620,7 @@ say "Hello, {answer}"
 | `lower(x)` | text | text | all lowercase |
 | `trim(x)` | text | text | Removes leading and trailing whitespace |
 | `replace(x, find, with)` | text, text, text | text | Replaces all occurrences of `find` with `with` |
+| `split(x)` | text | list | Splits on whitespace (any run of spaces/tabs) |
 | `split(x, sep)` | text, text | list | Splits text on separator |
 | `join(list, sep)` | list, text | text | Joins list items with separator |
 
@@ -563,6 +631,9 @@ say trim("  hello  ")                 # hello
 say replace("the cat sat", "cat", "dog")  # the dog sat
 parts = split("a,b,c", ",")
 say join(parts, " | ")                # a | b | c
+
+words = split("hello world foo")      # splits on whitespace
+say count(words)                       # 3
 ```
 
 ### Math (v0.5)
@@ -638,6 +709,11 @@ used.
 | `append(path, content)` | text, any | nothing | Appends content to file (creates if missing) |
 | `exists(path)` | text | bool | YES if the file exists, NO otherwise |
 
+**Path resolution:** Relative paths passed to `read`, `readlines`, and `exists`
+are resolved from the **script's own directory**, not the terminal's current
+folder. Absolute paths and forward slashes (`C:/Temp/file.txt`) work on all
+platforms.
+
 `write` and `append` use `_display()` — so `write "out.txt", YES` writes `YES`,
 and `write "out.txt", nothing` writes `nothing`.
 
@@ -697,9 +773,60 @@ if exists("config.txt")
 All five raise a runtime error if the file cannot be accessed (file not found,
 permission denied, etc.). Wrap in `try`/`catch` to handle gracefully.
 
-**Note on string escape sequences:** IXX string literals do **not** process `\n`,
-`\t`, or other escape sequences. To write multi-line files, use multiple `append`
-calls (the actual newline character is not writable from a string literal).
+**Note on string escape sequences:** IXX string literals process `\n` (newline),
+`\t` (tab), and `\\` (backslash). Other `\x` sequences are passed through unchanged.
+Windows paths can use either forward slashes or double backslashes:
+`"C:/Temp/file.txt"` or `"C:\\Temp\\file.txt"`.
+
+---
+
+## 12b. Imports (`use`)
+
+Import functions from another `.ixx` file or from the IXX standard library.
+
+```
+use "helpers.ixx"
+use std "time"
+use std "date"
+```
+
+- Only **function definitions** are imported — top-level statements in the imported file do not run.
+- Import paths are resolved relative to the importing file's directory.
+- Circular imports are a static error caught by `ixx check`.
+- Importing works in scripts and in the interactive REPL.
+
+```
+# helpers.ixx
+function greet name
+- say "Hello, {name}!"
+
+# main.ixx
+use "helpers.ixx"
+greet "World"    # Hello, World!
+```
+
+---
+
+## 12c. REPL / interactive shell
+
+Open the interactive shell with `ixx` or `ixx shell`.
+
+**State persistence:** Variables and functions defined in one input line are
+available on every subsequent line in the same session.
+
+```
+ixx> name = "Ixxy"
+ixx> say name
+Ixxy
+```
+
+**Imports work** — `use "file.ixx"` loads its functions into the current session.
+
+**Command history** is saved to `~/.ixx_history` on systems that support
+readline. History is available across sessions.
+
+**Quoted path casing is preserved** — if you type a path in quotes, its
+original capitalisation is kept when passed to shell commands.
 
 ---
 
@@ -844,6 +971,9 @@ These words cannot be used as variable or function names:
 | `least` | Part of `at least` |
 | `most` | Part of `at most` |
 | `contains` | Membership / substring check |
+| `each` | Part of `loop each … in …` |
+| `in` | Part of `loop each … in …` |
+| `use` | Import statement |
 
 **Note:** Identifiers that start with a reserved word are allowed as long as they
 are longer (e.g. `notify`, `notable`, `return_value` are all valid variable
@@ -881,7 +1011,18 @@ ixx: syntax error in hello.ixx line 3
 
 ### `ixx check`
 
-Run `ixx check <file.ixx>` to check syntax without executing.
+Run `ixx check <file.ixx>` to check syntax and semantics without executing.
+
+Success: `ixx: script.ixx - check passed`
+
+Add `--json` for machine-readable output:
+
+```json
+{"ok": true, "errors": []}
+{"ok": false, "errors": [{"line": 5, "col": null, "message": "...", "severity": "error"}]}
+```
+
+Warnings use `"severity": "warning"`. A file with only warnings still gets `"ok": true`.
 
 ### Error variable in catch
 
@@ -916,10 +1057,9 @@ catch
 - Comments (`#`) are stripped before parsing; they do not affect line numbers
   significantly but error line numbers may shift slightly in heavily-commented
   files.
-- IXX string literals do **not** process escape sequences. `"\n"` is literally
-  backslash-n. To embed a real newline in a written file, use multiple `append`
-  calls.
+- IXX string literals process three escape sequences: `\n` (newline), `\t` (tab),
+  and `\\` (backslash). Other `\x` sequences are passed through unchanged.
 
 ---
 
-*Dictionary current as of IXX v0.6.4.*
+*Dictionary current as of IXX v0.6.8.*

@@ -3,7 +3,7 @@ IXX Shell — Command Registry
 
 Defines the full command tree: metadata, examples, safety flags, and handlers.
 
-Commands that are live in v0.3.0 are wired to real handler functions.
+Commands wired to real handler functions are live and available now.
 Commands planned for later releases use the _stub() factory which prints
 a "not yet implemented" notice.
 
@@ -16,7 +16,7 @@ from __future__ import annotations
 from ..registry import CommandNode, CommandRegistry
 from ..renderer import show_not_implemented
 
-# Live handlers (v0.3.0)
+# Live handlers
 from .hardware import (
     handle_cpu, handle_cpu_cores, handle_cpu_info, handle_cpu_speed,
     handle_cpu_temperature,
@@ -48,7 +48,7 @@ from .demo_walk import handle_demo_walk
 # Stub handler factory
 # ---------------------------------------------------------------------------
 
-def _stub(path: str, note: str = "planned for a future release"):
+def _stub(path: str, note: str = "coming in a future release"):
     """Return a handler that prints the standard not-implemented notice."""
     def handler(*_args, **_kwargs) -> None:
         show_not_implemented(path, note)

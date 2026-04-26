@@ -73,7 +73,7 @@ This is a first-class design goal, not a bonus feature.
 
 When the user types a command, the shell understands the current partial input and shows what valid arguments can come next. This is not dumb autocomplete. It is grammar-aware guidance.
 
-### What is implemented now (v0.3.0)
+### What is implemented
 
 The current REPL provides:
 
@@ -141,7 +141,7 @@ Full inline live completions require control over:
 These need a library like `prompt_toolkit` or a fully custom TUI, and they need
 the standalone compiled binary where input handling can be owned end-to-end.
 
-**Do not build this in v0.3 or v0.4.** The guidance system works well without it.
+**Do not build this in the Python prototype.** The guidance system works well without it.
 The future IXX terminal app (standalone binary, v1.x) is the right home for full
 inline completions.
 
@@ -292,8 +292,7 @@ Would delete:
 Admin/root warnings:
 
 ```
-This command may require admin privileges.
-Run as administrator or use: native "..."
+This command may require administrator privileges (run as admin).
 ```
 
 ---
@@ -441,19 +440,19 @@ Drive   Total    Free
 - Local and remote commands use the same IXX syntax where possible.
 - The remote target is always clearly visible in the prompt and output.
 
-### v0.3.0 status
+### Current status
 
 `ssh`, `servers`, `server add`, `server list` are registered in the command
 guidance tree as stubs. They provide guidance and help text but do not
 connect to anything. No credentials are stored or prompted.
 
-Full SSH functionality is planned for a future release (v0.5.0+).
+Full SSH functionality is planned for a future release.
 
 ### Staged roadmap for remote access
 
-| Version | What gets added |
+| Milestone | What gets added |
 |---|---|
-| v0.3.0  | `ssh`, `servers`, `server` stubs in guidance tree only |
-| v0.4.0  | Possibly first `ssh user@host` connection prototype |
-| v0.5.0  | Saved server profiles, `run on server "..."` |
-| v0.6.0+ | Remote file copy, remote IXX commands, multi-server |
+| Stubs (current) | `ssh`, `servers`, `server` stubs in guidance tree only |
+| Near term | First `ssh user@host` connection prototype |
+| Later | Saved server profiles, `run on server "..."` |
+| Future | Remote file copy, remote IXX commands, multi-server |

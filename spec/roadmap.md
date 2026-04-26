@@ -80,7 +80,7 @@ What Phase 2 added:
 
 ## Phase 3 — Built-in system commands
 
-**Status:** in progress (branch: `v0.3.0-system-commands`)
+**Status:** complete (v0.3.x)
 
 First real-usefulness release. 14 command entries go live on Windows.
 
@@ -114,17 +114,16 @@ Still stubbed (planned for v0.4.0+):
 
 ## Phase 4 — Standard library and scripting power
 
-**Goal:** IXX can write real useful scripts.
+**Status:** largely complete as of v0.6.x
 
-What Phase 4 adds:
-- Functions / procedures
-- More data types (maps/dicts, sets)
-- File I/O: read file, write file, append file
-- HTTP: fetch url
-- Date and time
-- Error handling
-- Importing other `.ixx` files
-- A standard library (`stdlib/`) for common tasks
+What Phase 4 added:
+- Functions / procedures (v0.4.0)
+- File I/O: read file, write file, append file, exists (v0.6.0)
+- Error handling: try/catch (v0.6.0)
+- Importing other `.ixx` files (v0.6.5)
+- A standard library (`ixx/stdlib/`) for common tasks (v0.6.5)
+- List iteration: `loop each` (v0.6.6)
+- HTTP / date / time — still pending (future scope)
 
 ---
 
@@ -245,7 +244,9 @@ Respects `NO_COLOR` and `IXX_COLOR=0`. Plain-text fallback when color is off.
 
 ---
 
-## v0.5 — Records / objects (pending)Structured named fields on a value. Syntax TBD.
+## v0.5 — Records / objects (future)
+
+Structured named fields on a value. Syntax TBD.
 
 ---
 
@@ -255,19 +256,19 @@ Error handling shipped in v0.6. `try` / `catch` catches runtime errors and file 
 
 ---
 
-## v0.6 — Modules / imports (pending)
+## v0.6 — Modules / imports (completed in v0.6.5)
 
-Import other `.ixx` files as modules. Syntax TBD.
+Import other `.ixx` files as modules using `use "file.ixx"` or `use std "module"`. See `spec/language.md`.
 
 ---
 
-## v0.7 — Native bridge (pending)
+## v0.7 — Native bridge (future)
 
 Run raw shell commands from IXX. Syntax TBD.
 
 ---
 
-## v0.5 — Bundled hardware sensor driver (pending)
+## v0.5 — Bundled hardware sensor driver (future)
 
 On AMD Ryzen and many desktop systems, Windows does not expose CPU temperatures
 through any built-in WMI or ACPI interface. Currently IXX can only read sensor
@@ -291,7 +292,7 @@ voltages) work out of the box with zero setup.
 - `disk temp` — drive temperatures (via S.M.A.R.T. + sensor)
 - Fan speeds, voltages — future commands
 
-**Status:** pending — blocked on deciding whether to require admin on first sensor
+**Status:** future — blocked on deciding whether to require admin on first sensor
 use or gate the whole feature behind `ixx setup`.
 
 ---

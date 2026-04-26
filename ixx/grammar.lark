@@ -32,7 +32,8 @@ call_stmt: IDENTIFIER (expr ("," expr)*)? _NEWLINE
 
 // return statement — grammar allows it everywhere; interpreter enforces
 // that it only appears inside a function body at runtime.
-return_stmt: _RETURN_KW (expr)? _NEWLINE
+// Multiple comma-separated exprs produce a ListLit, mirroring assignment.
+return_stmt: _RETURN_KW (expr ("," expr)*)? _NEWLINE
 
 // Function definition
 func_def: _FUNCTION_KW IDENTIFIER func_params? _NEWLINE block

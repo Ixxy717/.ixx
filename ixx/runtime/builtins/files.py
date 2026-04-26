@@ -19,6 +19,10 @@ def _builtin_read(path: IXXValue) -> str:
         raise IXXRuntimeError(f"File not found: {path}")
     except PermissionError:
         raise IXXRuntimeError(f"Permission denied reading: {path}")
+    except UnicodeDecodeError:
+        raise IXXRuntimeError(
+            f"Could not read '{path}': the file contains characters that cannot be decoded as text."
+        )
     except OSError as e:
         raise IXXRuntimeError(f"Could not read '{path}': {e}")
 
@@ -33,6 +37,10 @@ def _builtin_readlines(path: IXXValue) -> list:
         raise IXXRuntimeError(f"File not found: {path}")
     except PermissionError:
         raise IXXRuntimeError(f"Permission denied reading: {path}")
+    except UnicodeDecodeError:
+        raise IXXRuntimeError(
+            f"Could not read '{path}': the file contains characters that cannot be decoded as text."
+        )
     except OSError as e:
         raise IXXRuntimeError(f"Could not read '{path}': {e}")
 
@@ -45,8 +53,13 @@ def _builtin_write(path: IXXValue, content: IXXValue) -> None:
             f.write(display(content))
     except PermissionError:
         raise IXXRuntimeError(f"Permission denied writing: {path}")
-    except OSError as e:
-        raise IXXRuntimeError(f"Could not write '{path}': {e}")
+    except OSError:
+        folder = os.path.dirname(path) or "."
+        if not os.path.isdir(folder):
+            raise IXXRuntimeError(
+                f"Could not write to '{path}'. The folder '{folder}' does not exist."
+            )
+        raise IXXRuntimeError(f"Could not write to '{path}'. Check that the path is valid.")
 
 
 def _builtin_append(path: IXXValue, content: IXXValue) -> None:
@@ -57,8 +70,13 @@ def _builtin_append(path: IXXValue, content: IXXValue) -> None:
             f.write(display(content))
     except PermissionError:
         raise IXXRuntimeError(f"Permission denied writing: {path}")
-    except OSError as e:
-        raise IXXRuntimeError(f"Could not append to '{path}': {e}")
+    except OSError:
+        folder = os.path.dirname(path) or "."
+        if not os.path.isdir(folder):
+            raise IXXRuntimeError(
+                f"Could not write to '{path}'. The folder '{folder}' does not exist."
+            )
+        raise IXXRuntimeError(f"Could not append to '{path}'. Check that the path is valid.")
 
 
 def _builtin_exists(path: IXXValue) -> bool:

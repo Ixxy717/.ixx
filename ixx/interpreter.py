@@ -23,12 +23,17 @@ from .ast_nodes import (
 
 from .runtime.errors      import IXXRuntimeError          # re-exported for compat
 from .runtime.environment import Environment, FunctionEnvironment
-from .runtime.values      import display as _display, truthy as _truthy, ixx_type_name as _ixx_type_name
+from .runtime.values      import display as _display, truthy as _truthy, ixx_type_name as _ixx_type_name, ixx_err_type as _ixx_err_type
 from .runtime.builtins    import BUILT_INS
 
 _INTERP_RE = re.compile(r'\{([A-Za-z_][A-Za-z0-9_]*)\}')
 
 _LOOP_LIMIT = 10_000
+
+
+def _nargs(n: int) -> str:
+    """Return a pluralised argument count string: '1 argument', '2 arguments'."""
+    return f"{n} argument" if n == 1 else f"{n} arguments"
 _CALL_DEPTH_LIMIT = 100
 
 
@@ -49,10 +54,12 @@ class Interpreter:
         self._func_table: dict[str, FuncDef] = {}
         self._global_env: Environment = Environment()
         self._call_depth: int = 0
+        self._exec_nesting: int = 0  # > 0 when inside any nested block
 
     def run(self, program: Program, extra_funcs: dict[str, FuncDef] | None = None) -> None:
         self._global_env = Environment()
         self._call_depth = 0
+        self._exec_nesting = 0
 
         # Seed the function table with imported functions.
         self._func_table = dict(extra_funcs or {})
@@ -70,11 +77,51 @@ class Interpreter:
         # Second pass: execute all statements.
         self._exec_block(program.body, self._global_env)
 
+    def run_repl_input(
+        self,
+        program: Program,
+        extra_funcs: dict[str, FuncDef] | None = None,
+    ) -> None:
+        """Execute *program* inside the current persistent session state.
+
+        Unlike run(), this method does NOT reset the global environment or the
+        function table.  Variables and functions defined in earlier REPL inputs
+        remain visible.  New imported functions are merged (not replaced).
+
+        Use this method exclusively for the interactive REPL.
+        """
+        # Merge new imports without discarding ones already accumulated.
+        if extra_funcs:
+            for name, func in extra_funcs.items():
+                if name not in self._func_table:
+                    self._func_table[name] = func
+
+        # Register new top-level function definitions.
+        for stmt in program.body:
+            if isinstance(stmt, FuncDef):
+                # Silently overwrite: redefining a function in the REPL is normal.
+                self._func_table[stmt.name] = stmt
+
+        # Execute against the persistent global environment.
+        self._exec_block(program.body, self._global_env)
+
     # ── statement dispatch ─────────────────────────────────────────────────────
 
     def _exec_block(self, stmts: list[Stmt], env: Environment) -> None:
         for stmt in stmts:
             self._exec(stmt, env)
+
+    def _exec_nested(self, stmts: list[Stmt], env: Environment) -> None:
+        """Execute a block that is nested inside another statement (if/loop/try/function).
+
+        Increments _exec_nesting so that FuncDef inside any block can be detected
+        and rejected at runtime.
+        """
+        self._exec_nesting += 1
+        try:
+            self._exec_block(stmts, env)
+        finally:
+            self._exec_nesting -= 1
 
     def _exec(self, stmt: Stmt, env: Environment) -> None:
         match stmt:
@@ -83,9 +130,9 @@ class Interpreter:
 
             case If(condition=cond, then_body=then_body, else_body=else_body):
                 if _truthy(self._eval(cond, env)):
-                    self._exec_block(then_body, env.child())
+                    self._exec_nested(then_body, env.child())
                 elif else_body:
-                    self._exec_block(else_body, env.child())
+                    self._exec_nested(else_body, env.child())
 
             case Loop(condition=cond, body=body):
                 iterations = 0
@@ -96,12 +143,12 @@ class Interpreter:
                             f"Loop ran more than {_LOOP_LIMIT:,} times — did you mean to loop forever?\n"
                             "  Tip: Make sure your loop condition eventually becomes NO."
                         )
-                    self._exec_block(body, env.child())
+                    self._exec_nested(body, env.child())
 
             case LoopEach(var_name=var_name, iterable=iterable_expr, body=body):
                 iterable = self._eval(iterable_expr, env)
                 if not isinstance(iterable, list):
-                    type_name = _ixx_type_name(iterable)
+                    type_name = _ixx_err_type(iterable)
                     raise IXXRuntimeError(
                         f"'loop each' expects a list, got {type_name}."
                     )
@@ -113,7 +160,7 @@ class Interpreter:
                 for item in iterable:
                     iter_env = env.child()
                     iter_env.set(var_name, item)
-                    self._exec_block(body, iter_env)
+                    self._exec_nested(body, iter_env)
 
             case Say(args=args):
                 parts = [_display(self._eval(a, env)) for a in args]
@@ -132,23 +179,36 @@ class Interpreter:
                 raise _ReturnSignal(value)
 
             case FuncDef():
-                pass  # already collected during the first pass in run()
+                if self._exec_nesting > 0:
+                    raise IXXRuntimeError(
+                        "Function definitions must be at the top level, "
+                        "not inside if/loop/try/other functions."
+                    )
+                # else: already registered during the first pass in run().
 
             case UseStmt():
                 pass  # already resolved by modules.resolve_imports() before run()
 
             case TryCatch(try_body=try_body, catch_body=catch_body):
                 try:
-                    self._exec_block(try_body, env.child())
+                    self._exec_nested(try_body, env.child())
                 except (IXXRuntimeError, OSError, IOError, UnicodeDecodeError) as exc:
                     if catch_body:
                         catch_env = env.child()
-                        catch_env.set("error", str(exc))
-                        self._exec_block(catch_body, catch_env)
+                        if isinstance(exc, IXXRuntimeError):
+                            err_msg = str(exc)
+                        elif isinstance(exc, OSError):
+                            err_msg = f"Something went wrong: {exc.strerror or 'could not access file'}"
+                        elif isinstance(exc, UnicodeDecodeError):
+                            err_msg = "Something went wrong: the file contains characters that could not be read."
+                        else:
+                            err_msg = "Something went wrong."
+                        catch_env.set("error", err_msg)
+                        self._exec_nested(catch_body, catch_env)
 
             case _:
                 raise IXXRuntimeError(
-                    f"Unknown statement type: {type(stmt).__name__}"
+                    "This statement cannot be run here."
                 )
 
     # ── expression evaluation ──────────────────────────────────────────────────
@@ -178,7 +238,7 @@ class Interpreter:
                 if isinstance(v, (int, float)):
                     return -v
                 raise IXXRuntimeError(
-                    f"Cannot negate a {_ixx_type_name(v)} value."
+                    f"Cannot negate a {_ixx_err_type(v)} value."
                 )
 
             case BinOp(op=op, left=left, right=right):
@@ -204,7 +264,7 @@ class Interpreter:
 
             case _:
                 raise IXXRuntimeError(
-                    f"Unknown expression type: {type(expr).__name__}"
+                    "This expression cannot be evaluated here."
                 )
 
     # ── function dispatch ──────────────────────────────────────────────────────
@@ -220,8 +280,15 @@ class Interpreter:
             except IXXRuntimeError:
                 raise
             except TypeError as e:
+                # Distinguish arity errors (wrong number of args) from type errors.
+                # Python arity TypeErrors always contain "argument" in the message.
+                if "argument" in str(e):
+                    got = len(args)
+                    raise IXXRuntimeError(
+                        f"'{name}' was called with {_nargs(got)}, but that is not the right number."
+                    )
                 raise IXXRuntimeError(
-                    f"Wrong number of arguments for '{name}': {e}"
+                    f"'{name}' cannot be used with that type of value."
                 )
 
         # User-defined functions
@@ -229,7 +296,7 @@ class Interpreter:
             func = self._func_table[name]
             if len(args) != len(func.params):
                 raise IXXRuntimeError(
-                    f"'{name}' expects {len(func.params)} argument(s), got {len(args)}."
+                    f"'{name}' expects {_nargs(len(func.params))}, got {len(args)}."
                     + (f"  Parameters: {', '.join(func.params)}" if func.params else "")
                 )
 
@@ -246,7 +313,7 @@ class Interpreter:
                 local._vars[param] = value
 
             try:
-                self._exec_block(func.body, local)
+                self._exec_nested(func.body, local)
                 return None
             except _ReturnSignal as ret:
                 return ret.value
@@ -263,13 +330,28 @@ class Interpreter:
 
     # ── string interpolation ───────────────────────────────────────────────────
 
+    # Keywords that are valid IXX literals but never live in the variable
+    # environment.  {YES}, {NO}, and {nothing} substitute their display value
+    # silently instead of printing a "not defined" warning.
+    _INTERP_KEYWORDS: dict[str, str] = {
+        "YES":     "YES",
+        "NO":      "NO",
+        "yes":     "YES",
+        "no":      "NO",
+        "nothing": "nothing",
+    }
+
     def _interpolate(self, text: str, env: Environment) -> str:
         """Replace {varname} with current variable values.
 
         Undefined variables print a warning to stderr and render as {?name}.
+        IXX literal keywords (YES, NO, nothing) substitute their display value.
         """
         def replace(m: re.Match) -> str:
             name = m.group(1)
+            # Fast path: IXX literal keywords substitute directly.
+            if name in self._INTERP_KEYWORDS:
+                return self._INTERP_KEYWORDS[name]
             try:
                 return _display(env.get(name))
             except IXXRuntimeError:
@@ -295,6 +377,12 @@ class Interpreter:
                 "Use a number instead."
             )
 
+        # Guard: lists are not valid arithmetic operands
+        if isinstance(lv, list) or isinstance(rv, list):
+            raise IXXRuntimeError(
+                f"Cannot use '{op}' with a list."
+            )
+
         match op:
             case "+":
                 # String + anything = string concatenation
@@ -309,21 +397,21 @@ class Interpreter:
                     return lv + rv          # type: ignore[operator]
                 except TypeError:
                     raise IXXRuntimeError(
-                        f"Cannot use '+' with {_ixx_type_name(lv)} and {_ixx_type_name(rv)}."
+                        f"Cannot use '+' with {_ixx_err_type(lv)} and {_ixx_err_type(rv)}."
                     )
             case "-":
                 try:
                     return lv - rv          # type: ignore[operator]
                 except TypeError:
                     raise IXXRuntimeError(
-                        f"Cannot use '-' with {_ixx_type_name(lv)} and {_ixx_type_name(rv)}."
+                        f"Cannot use '-' with {_ixx_err_type(lv)} and {_ixx_err_type(rv)}."
                     )
             case "*":
                 try:
                     return lv * rv          # type: ignore[operator]
                 except TypeError:
                     raise IXXRuntimeError(
-                        f"Cannot use '*' with {_ixx_type_name(lv)} and {_ixx_type_name(rv)}."
+                        f"Cannot use '*' with {_ixx_err_type(lv)} and {_ixx_err_type(rv)}."
                     )
             case "/":
                 if rv == 0:
@@ -334,7 +422,7 @@ class Interpreter:
                     result = lv / rv        # type: ignore[operator]
                 except TypeError:
                     raise IXXRuntimeError(
-                        f"Cannot use '/' with {_ixx_type_name(lv)} and {_ixx_type_name(rv)}."
+                        f"Cannot use '/' with {_ixx_err_type(lv)} and {_ixx_err_type(rv)}."
                     )
                 # Return int when both inputs are integers and result is whole
                 if (
@@ -344,7 +432,7 @@ class Interpreter:
                     return int(result)
                 return result
             case _:
-                raise IXXRuntimeError(f"Unknown operator: {op!r}")
+                raise IXXRuntimeError("That arithmetic operation is not supported.")
 
     # ── comparisons ────────────────────────────────────────────────────────────
 
@@ -360,9 +448,16 @@ class Interpreter:
                 return a != b
             case "less than" | "more than" | "at least" | "at most":
                 if isinstance(a, bool) or isinstance(b, bool):
+                    # If the LEFT operand is bool it means a previous comparison
+                    # produced YES/NO — the user is chaining comparisons.
+                    if isinstance(a, bool):
+                        raise IXXRuntimeError(
+                            "Comparisons cannot be chained. "
+                            f"Use 'and': if a {op} b and b {op} c"
+                        )
                     raise IXXRuntimeError(
                         "Cannot use YES/NO in numeric comparisons. "
-                        "Use 'is' or 'is not' to compare booleans."
+                        "Use 'is' or 'is not' to compare yes-or-no values (YES / NO)."
                     )
                 try:
                     match op:
@@ -372,7 +467,7 @@ class Interpreter:
                         case "at most":   return a <= b  # type: ignore[operator]
                 except TypeError:
                     raise IXXRuntimeError(
-                        f"Cannot compare {_ixx_type_name(a)} and {_ixx_type_name(b)} "
+                        f"Cannot compare {_ixx_err_type(a)} and {_ixx_err_type(b)} "
                         f"using '{op}'. Both values must be numbers or both must be text."
                     )
             case "contains":
@@ -381,16 +476,16 @@ class Interpreter:
                     if a and type(a[0]) != type(b):
                         print(
                             f"Warning: types don't match in 'contains' — "
-                            f"looking for {_ixx_type_name(b)} in a list of "
-                            f"{_ixx_type_name(a[0])}",
+                            f"looking for {_ixx_err_type(b)} in a list of "
+                            f"{_ixx_err_type(a[0])}",
                             file=sys.stderr,
                         )
                     return b in a
                 if isinstance(a, str):
-                    return str(b) in a
+                    return _display(b) in a
                 raise IXXRuntimeError(
-                    f"'contains' only works on lists and text, not {_ixx_type_name(a)}."
+                    f"'contains' only works on lists and text, not {_ixx_err_type(a)}."
                 )
             case _:
-                raise IXXRuntimeError(f"Unknown comparison: {op!r}")
+                raise IXXRuntimeError("That comparison is not supported.")
         return False  # unreachable, satisfies type checker

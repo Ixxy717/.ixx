@@ -195,7 +195,7 @@ def handle_demo_walk(
                 return
 
     print()
-    print("  That is IXX v0.4.")
+    print("  That is IXX — a readable scripting language.")
     print("  Type IXX code directly in the shell, or run a .ixx file with:")
     print("    ixx yourfile.ixx")
     print()

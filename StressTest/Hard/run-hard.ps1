@@ -171,12 +171,12 @@ Run-JsonCheck "hard good deep import" "StressTest\Hard\06-hard-import-deep-chain
 Run-JsonCheck "hard good stdlib composition" "StressTest\Hard\08-hard-stdlib-composition.ixx" $true
 Run-JsonCheck "hard good mega pipeline" "StressTest\Hard\19-hard-mega-pipeline.ixx" $true
 Run-JsonCheck "hard good mega file pipeline" "StressTest\Hard\20-hard-mega-pipeline-file.ixx" $true
-Run-JsonCheck "hard self cycle" "StressTest\Hard\ExpectedFailures\bad-hard-self-cycle.ixx" $false "Circular"
+Run-JsonCheck "hard self cycle" "StressTest\Hard\ExpectedFailures\bad-hard-self-cycle.ixx" $false "loop"
 Run-JsonCheck "hard duplicate local" "StressTest\Hard\ExpectedFailures\bad-hard-import-duplicate-local.ixx" $false "Duplicate"
 Run-JsonCheck "hard bad number literal" "StressTest\Hard\ExpectedFailures\bad-hard-top-level-builtin-literal.ixx" $false "Cannot convert"
 Run-JsonCheck "hard wrong imported arity" "StressTest\Hard\ExpectedFailures\bad-hard-import-wrong-arity.ixx" $false "expects 1"
 Run-JsonCheck "hard bad use nonliteral" "StressTest\Hard\ExpectedFailures\bad-hard-use-nonliteral.ixx" $false "Expected text"
-Run-JsonCheck "mega cycle" "StressTest\Hard\ExpectedFailures\bad-mega-cycle.ixx" $false "Circular"
+Run-JsonCheck "mega cycle" "StressTest\Hard\ExpectedFailures\bad-mega-cycle.ixx" $false "loop"
 Run-JsonCheck "mega duplicate imports" "StressTest\Hard\ExpectedFailures\bad-mega-duplicate-imports.ixx" $false "Duplicate"
 Run-JsonCheck "mega wrong record arity" "StressTest\Hard\ExpectedFailures\bad-mega-wrong-arity-record.ixx" $false "expects 2"
 Run-JsonCheck "mega invalid color" "StressTest\Hard\ExpectedFailures\bad-mega-invalid-color.ixx" $false "Unknown color"

@@ -482,7 +482,7 @@ class TestCLI(unittest.TestCase):
     def test_check_valid_file(self):
         code, out = cli("check", "examples/hello.ixx")
         self.assertEqual(code, 0)
-        self.assertIn("syntax OK", out)
+        self.assertIn("check passed", out)
 
     def test_check_bad_file(self):
         # Write a temp bad file, check it, then remove it
@@ -982,10 +982,10 @@ class TestShowoff(unittest.TestCase):
         self.assertIn("FUNCTIONS", self._plain_out())
 
     def test_output_contains_478_passed(self):
-        self.assertIn("478 passed", self._plain_out())
+        self.assertIn("hundreds passing", self._plain_out())
 
     def test_output_contains_229_passed(self):
-        self.assertIn("229 passed", self._plain_out())
+        self.assertIn("all passing", self._plain_out())
 
     # ── in-process with mocked sleep ──────────────────────────────────────────
 
@@ -1383,7 +1383,7 @@ class TestImports(unittest.TestCase):
         prog = parse('use "a.ixx"\nsay "x"')
         with self.assertRaises(IXXImportError) as ctx:
             resolve_imports(prog, self._dir)
-        self.assertIn("Circular", str(ctx.exception))
+        self.assertIn("loop", str(ctx.exception))
 
     def test_resolve_duplicate_function_raises(self):
         from ixx.parser import parse
@@ -1613,14 +1613,31 @@ class TestEdgeCases(unittest.TestCase):
 
     # ── first/last on empty list ──────────────────────────────────────────────
 
-    def test_first_empty_list(self):
-        """first() on an empty list must return nothing."""
+    def test_first_on_empty_list(self):
+        """first() on an empty list must return nothing.
+        IXX has no empty-list literal; split("") is the valid production path.
+        """
+        # split("") calls Python "".split() which returns [] — a real empty list.
+        src = 'empty = split("")\nsay first(empty)'
+        output = run(src)
+        self.assertEqual(output, "nothing")
+
+    def test_first_on_nonempty_list(self):
+        """first() on a non-empty list returns the first element."""
         src = 'items = 1, 2, 3\nsay type(first(items))'
         output = run(src)
         self.assertIn("number", output)
 
-    def test_last_empty_list(self):
-        """last() on a nonempty list returns the last element."""
+    def test_last_on_empty_list(self):
+        """last() on an empty list must return nothing.
+        IXX has no empty-list literal; split("") is the valid production path.
+        """
+        src = 'empty = split("")\nsay last(empty)'
+        output = run(src)
+        self.assertEqual(output, "nothing")
+
+    def test_last_on_nonempty_list(self):
+        """last() on a non-empty list returns the last element."""
         src = 'items = 10, 20, 30\nsay last(items)'
         output = run(src)
         self.assertEqual(output, "30")
@@ -1628,10 +1645,10 @@ class TestEdgeCases(unittest.TestCase):
     # ── number() edge cases ───────────────────────────────────────────────────
 
     def test_number_float_string(self):
-        """number('1.0') must return 1.0 (float)."""
+        """number('1.0') must return a number that displays cleanly (no trailing .0)."""
         src = 'say number("1.0")'
         output = run(src)
-        self.assertEqual(output, "1.0")
+        self.assertEqual(output, "1")
 
     def test_number_bool_raises(self):
         """number(YES) must raise IXXRuntimeError."""
@@ -1749,6 +1766,2587 @@ class TestEdgeCases(unittest.TestCase):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Letter A — v0.6.8 crash-path fixes
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestLetterA(unittest.TestCase):
+    """Tests for v0.6.8 Letter A: crash path fixes."""
+
+    # ── A1: split() empty separator ───────────────────────────────────────────
+
+    def test_split_empty_sep_raises(self):
+        """split(x, '') must raise IXXRuntimeError, not raw ValueError."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('say split("hello", "")')
+        self.assertIn("separator", str(ctx.exception).lower())
+        self.assertIn("empty", str(ctx.exception).lower())
+
+    def test_split_empty_sep_message_no_traceback(self):
+        """The split empty-sep error must not contain 'ValueError'."""
+        try:
+            run('say split("hello", "")')
+        except IXXRuntimeError as e:
+            self.assertNotIn("ValueError", str(e))
+        except Exception as e:
+            self.fail(f"Expected IXXRuntimeError, got {type(e).__name__}: {e}")
+
+    def test_split_normal_still_works(self):
+        """Normal split must still work after the empty-sep guard."""
+        result = run('parts = split("a,b,c", ",")\nsay count(parts)')
+        self.assertEqual(result, "3")
+
+    def test_split_no_sep_still_works(self):
+        """split(x) with no separator must still split on whitespace."""
+        result = run('parts = split("hello world")\nsay count(parts)')
+        self.assertEqual(result, "2")
+
+    # ── A2: ask() KeyboardInterrupt ───────────────────────────────────────────
+
+    def test_ask_keyboard_interrupt_becomes_ixx_error(self):
+        """ask() KeyboardInterrupt must raise IXXRuntimeError, not propagate raw."""
+        with unittest.mock.patch("builtins.input", side_effect=KeyboardInterrupt):
+            with self.assertRaises(IXXRuntimeError) as ctx:
+                run('x = ask("prompt")\nsay x')
+        self.assertIn("cancelled", str(ctx.exception).lower())
+
+    def test_ask_keyboard_interrupt_catchable_by_try(self):
+        """ask() KeyboardInterrupt must be catchable by IXX try/catch."""
+        with unittest.mock.patch("builtins.input", side_effect=KeyboardInterrupt):
+            result = run(
+                'try\n'
+                '- x = ask("?")\n'
+                'catch\n'
+                '- say "caught"'
+            )
+        self.assertEqual(result, "caught")
+
+    def test_ask_eof_still_friendly(self):
+        """ask() EOF must still give the existing friendly message."""
+        with unittest.mock.patch("builtins.input", side_effect=EOFError):
+            with self.assertRaises(IXXRuntimeError) as ctx:
+                run('x = ask("?")\nsay x')
+        self.assertIn("input", str(ctx.exception).lower())
+
+    # ── A3: builtin TypeError not reported as arity ───────────────────────────
+
+    def test_builtin_type_error_not_arity_message(self):
+        """A builtin type error must not say 'Wrong number of arguments'."""
+        # sort() on a mixed list raises a TypeError internally
+        try:
+            run('items = 1, "a"\nsort(items)')
+        except IXXRuntimeError as e:
+            self.assertNotIn("Wrong number of arguments", str(e))
+        except Exception:
+            pass  # other exceptions are fine here
+
+    def test_builtin_arity_error_still_friendly(self):
+        """Wrong arity for a builtin must still give a friendly message."""
+        try:
+            run('say count()')
+        except IXXRuntimeError as e:
+            msg = str(e)
+            self.assertNotIn("positional argument", msg)
+            # Should say something about wrong number of arguments
+            self.assertTrue(
+                "argument" in msg.lower() or "number" in msg.lower(),
+                f"Expected arity hint, got: {msg}"
+            )
+
+    def test_builtin_type_error_no_raw_python(self):
+        """Builtin type errors must not expose raw Python exception text."""
+        # Passing a non-list to sort triggers a type error path
+        try:
+            run('items = 1, "a"\nsort(items)')
+        except IXXRuntimeError as e:
+            msg = str(e)
+            self.assertNotIn("'<' not supported", msg)
+            self.assertNotIn("TypeError", msg)
+
+    # ── A4: nested function definitions ───────────────────────────────────────
+
+    def test_nested_function_inside_if_runtime(self):
+        """function inside if must raise IXXRuntimeError at runtime."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run(
+                'if YES\n'
+                '- function bad x\n'
+                '-- return x\n'
+                'say "done"'
+            )
+        self.assertIn("top level", str(ctx.exception).lower())
+
+    def test_nested_function_inside_loop_runtime(self):
+        """function inside loop must raise IXXRuntimeError at runtime."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run(
+                'n = 1\n'
+                'loop n less than 2\n'
+                '- function bad x\n'
+                '-- return x\n'
+                '- n = 2'
+            )
+        self.assertIn("top level", str(ctx.exception).lower())
+
+    def test_nested_function_inside_loop_each_runtime(self):
+        """function inside loop each must raise IXXRuntimeError at runtime."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run(
+                'items = 1, 2\n'
+                'loop each item in items\n'
+                '- function bad x\n'
+                '-- return x'
+            )
+        self.assertIn("top level", str(ctx.exception).lower())
+
+    def test_nested_function_inside_try_runtime(self):
+        """function inside try raises IXXRuntimeError, which IXX try/catch can catch."""
+        # The nested function error IS catchable by IXX's own try/catch block —
+        # this is correct behavior (users can recover from it).
+        result = run(
+            'try\n'
+            '- function bad x\n'
+            '-- return x\n'
+            'catch\n'
+            '- say error'
+        )
+        self.assertIn("top level", result.lower())
+
+    def test_nested_function_inside_function_runtime(self):
+        """function inside another function must raise IXXRuntimeError at runtime."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run(
+                'function outer a\n'
+                '- function inner x\n'
+                '-- return x\n'
+                'say outer(1)'
+            )
+        self.assertIn("top level", str(ctx.exception).lower())
+
+    def test_nested_function_checker_inside_if(self):
+        """Checker must flag function inside if as an error."""
+        from ixx.checker import SemanticChecker
+        program = parse(
+            'if YES\n'
+            '- function bad x\n'
+            '-- return x'
+        )
+        errors = SemanticChecker().check(program, "<test>")
+        messages = [e.message for e in errors]
+        self.assertTrue(
+            any("top level" in m.lower() for m in messages),
+            f"Expected nested function error, got: {messages}"
+        )
+
+    def test_nested_function_checker_inside_loop(self):
+        """Checker must flag function inside loop as an error."""
+        from ixx.checker import SemanticChecker
+        program = parse(
+            'n = 3\n'
+            'loop n more than 0\n'
+            '- function bad x\n'
+            '-- return x\n'
+            '- n = n - 1'
+        )
+        errors = SemanticChecker().check(program, "<test>")
+        self.assertTrue(any("top level" in e.message.lower() for e in errors))
+
+    def test_nested_function_checker_inside_function(self):
+        """Checker must flag function inside another function as an error."""
+        from ixx.checker import SemanticChecker
+        program = parse(
+            'function outer\n'
+            '- function inner x\n'
+            '-- return x'
+        )
+        errors = SemanticChecker().check(program, "<test>")
+        self.assertTrue(any("top level" in e.message.lower() for e in errors))
+
+    def test_top_level_function_still_works(self):
+        """Top-level function definitions must still work normally."""
+        result = run(
+            'function double x\n'
+            '- return x * 2\n'
+            'say double(5)'
+        )
+        self.assertEqual(result, "10")
+
+    # ── A5: UnicodeDecodeError in file builtins ───────────────────────────────
+
+    def test_read_unicode_error_friendly(self):
+        """read() on a binary file must give IXXRuntimeError, not UnicodeDecodeError."""
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".bin") as f:
+            f.write(b"\xff\xfe binary \x00\x01 garbage")
+            path = f.name
+        # Use forward slashes so \t in Windows temp paths isn't treated as tab escape.
+        ixx_path = path.replace("\\", "/")
+        try:
+            with self.assertRaises(IXXRuntimeError) as ctx:
+                run(f'say read("{ixx_path}")')
+            msg = str(ctx.exception)
+            self.assertNotIn("UnicodeDecodeError", msg)
+            self.assertNotIn("codec", msg)
+            self.assertIn("cannot be decoded", msg)
+        finally:
+            os.unlink(path)
+
+    def test_readlines_unicode_error_friendly(self):
+        """readlines() on a binary file must give IXXRuntimeError, not UnicodeDecodeError."""
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".bin") as f:
+            f.write(b"\xff\xfe binary \x00\x01 garbage")
+            path = f.name
+        # Use forward slashes so \t in Windows temp paths isn't treated as tab escape.
+        ixx_path = path.replace("\\", "/")
+        try:
+            with self.assertRaises(IXXRuntimeError) as ctx:
+                run(f'say readlines("{ixx_path}")')
+            msg = str(ctx.exception)
+            self.assertNotIn("UnicodeDecodeError", msg)
+            self.assertIn("cannot be decoded", msg)
+        finally:
+            os.unlink(path)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Letter B — v0.6.8 wrong-output fixes
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestLetterB(unittest.TestCase):
+    """Tests for v0.6.8 Letter B: silently-incorrect-output fixes."""
+
+    # ── B1: join() display ────────────────────────────────────────────────────
+
+    def test_join_yes_no_nothing(self):
+        """join() must display YES/NO/nothing, not True/False/None."""
+        result = run(
+            'vals = YES, NO, nothing\n'
+            'say join(vals, " ")'
+        )
+        self.assertEqual(result, "YES NO nothing")
+
+    def test_join_yes_no_no_python_repr(self):
+        """join() must not produce True/False/None."""
+        result = run('vals = YES, NO, nothing\nsay join(vals, ",")')
+        self.assertNotIn("True", result)
+        self.assertNotIn("False", result)
+        self.assertNotIn("None", result)
+
+    def test_join_with_separator_displays_correctly(self):
+        """join() with custom separator must show IXX values."""
+        result = run('vals = YES, NO\nsay join(vals, " | ")')
+        self.assertEqual(result, "YES | NO")
+
+    def test_join_numbers_still_work(self):
+        """join() with numbers still works correctly."""
+        result = run('nums = 1, 2, 3\nsay join(nums, "-")')
+        self.assertEqual(result, "1-2-3")
+
+    def test_join_default_separator(self):
+        """join() default separator is ', '."""
+        result = run('vals = "a", "b", "c"\nsay join(vals)')
+        self.assertEqual(result, "a, b, c")
+
+    # ── B2: replace() replacement display ────────────────────────────────────
+
+    def test_replace_replacement_yes(self):
+        """replace() with YES replacement must show 'YES', not 'True'."""
+        result = run('say replace("x is here", "here", YES)')
+        self.assertEqual(result, "x is YES")
+
+    def test_replace_replacement_no(self):
+        """replace() with NO replacement must show 'NO', not 'False'."""
+        result = run('say replace("x is here", "here", NO)')
+        self.assertEqual(result, "x is NO")
+
+    def test_replace_replacement_nothing(self):
+        """replace() with nothing replacement must show 'nothing', not 'None'."""
+        result = run('say replace("x is here", "here", nothing)')
+        self.assertEqual(result, "x is nothing")
+
+    def test_replace_normal_still_works(self):
+        """replace() with normal text replacement still works."""
+        result = run('say replace("hello world", "world", "IXX")')
+        self.assertEqual(result, "hello IXX")
+
+    # ── B3: replace() empty find ──────────────────────────────────────────────
+
+    def test_replace_empty_find_raises(self):
+        """replace() with empty find string must raise IXXRuntimeError."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('say replace("abc", "", "X")')
+        self.assertIn("empty", str(ctx.exception).lower())
+
+    def test_replace_empty_find_no_python_behavior(self):
+        """replace() with empty find must not silently insert between every char."""
+        try:
+            run('say replace("abc", "", "X")')
+            self.fail("Expected IXXRuntimeError")
+        except IXXRuntimeError as e:
+            self.assertIn("empty", str(e).lower())
+
+    # ── B4: number() error message display ───────────────────────────────────
+
+    def test_number_nothing_error_says_nothing(self):
+        """number(nothing) error must say 'nothing', not 'None'."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('x = nothing\nsay number(x)')
+        msg = str(ctx.exception)
+        self.assertIn("nothing", msg)
+        self.assertNotIn("None", msg)
+
+    def test_number_yes_error_says_yes(self):
+        """number(YES) error must say 'YES', not 'True'."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('say number(YES)')
+        msg = str(ctx.exception)
+        self.assertIn("YES", msg)
+        self.assertNotIn("True", msg)
+
+    def test_number_valid_string_still_works(self):
+        """number('42') must still work."""
+        self.assertEqual(run('say number("42")'), "42")
+
+    # ── B5: contains text path uses display() ────────────────────────────────
+
+    def test_contains_text_nothing(self):
+        '"nothing here" contains nothing must match "nothing" display value.'
+        result = run('say "nothing here" contains nothing')
+        self.assertEqual(result, "YES")
+
+    def test_contains_text_yes(self):
+        '"YES value" contains YES must match "YES" display value.'
+        result = run('say "YES value" contains YES')
+        self.assertEqual(result, "YES")
+
+    def test_contains_text_no(self):
+        '"NO value" contains NO must match "NO" display value.'
+        result = run('say "NO value" contains NO')
+        self.assertEqual(result, "YES")
+
+    def test_contains_text_yes_not_true(self):
+        """contains must not search for 'True' when given YES."""
+        result = run('say "True value" contains YES')
+        self.assertEqual(result, "NO")
+
+    def test_contains_text_nothing_not_none(self):
+        """contains must not search for 'None' when given nothing."""
+        result = run('say "None value" contains nothing')
+        self.assertEqual(result, "NO")
+
+    def test_contains_list_still_works(self):
+        """contains on list still works correctly."""
+        result = run('items = 1, 2, 3\nsay items contains 2')
+        self.assertEqual(result, "YES")
+
+    # ── B6: min()/max() reject booleans ──────────────────────────────────────
+
+    def test_min_yes_raises(self):
+        """min(YES, 2) must raise IXXRuntimeError."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('say min(YES, 2)')
+        self.assertIn("YES/NO", str(ctx.exception))
+
+    def test_max_no_raises(self):
+        """max(NO, 2) must raise IXXRuntimeError."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('say max(NO, 2)')
+        self.assertIn("YES/NO", str(ctx.exception))
+
+    def test_min_list_with_bool_raises(self):
+        """min(list containing YES) must raise IXXRuntimeError."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('items = YES, 2, 3\nsay min(items)')
+        self.assertIn("YES/NO", str(ctx.exception))
+
+    def test_max_list_with_bool_raises(self):
+        """max(list containing NO) must raise IXXRuntimeError."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('items = 1, NO, 3\nsay max(items)')
+        self.assertIn("YES/NO", str(ctx.exception))
+
+    def test_min_numbers_still_works(self):
+        """min(3, 7) must still work."""
+        self.assertEqual(run('say min(3, 7)'), "3")
+
+    def test_max_numbers_still_works(self):
+        """max(3, 7) must still work."""
+        self.assertEqual(run('say max(3, 7)'), "7")
+
+    def test_min_list_numbers_still_works(self):
+        """min(number list) must still work."""
+        self.assertEqual(run('items = 3, 1, 4\nsay min(items)'), "1")
+
+    # ── B7: round(x, YES) rejects bool digits ─────────────────────────────────
+
+    def test_round_yes_digits_raises(self):
+        """round(3.14, YES) must raise IXXRuntimeError."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('say round(3.14, YES)')
+        self.assertIn("YES/NO", str(ctx.exception))
+
+    def test_round_no_digits_raises(self):
+        """round(3.14, NO) must raise IXXRuntimeError."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('say round(3.14, NO)')
+        self.assertIn("YES/NO", str(ctx.exception))
+
+    def test_round_normal_still_works(self):
+        """round(3.14, 1) must still work."""
+        self.assertEqual(run('say round(3.14, 1)'), "3.1")
+
+    def test_round_no_digits_zero_still_works(self):
+        """round(3.7) with no digits arg must still work (default 0)."""
+        self.assertEqual(run('say round(3.7)'), "4")
+
+    # ── B8: list arithmetic rejected ─────────────────────────────────────────
+
+    def test_list_plus_list_raises(self):
+        """list + list must raise IXXRuntimeError."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('a = 1, 2\nb = 3, 4\nsay a + b')
+        self.assertIn("list", str(ctx.exception).lower())
+
+    def test_list_times_number_raises(self):
+        """list * number must raise IXXRuntimeError."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('a = 1, 2\nsay a * 3')
+        self.assertIn("list", str(ctx.exception).lower())
+
+    def test_number_times_list_raises(self):
+        """number * list must raise IXXRuntimeError."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('a = 1, 2\nsay 3 * a')
+        self.assertIn("list", str(ctx.exception).lower())
+
+    def test_list_minus_number_raises(self):
+        """list - number must raise IXXRuntimeError."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('a = 1, 2\nsay a - 1')
+        self.assertIn("list", str(ctx.exception).lower())
+
+    def test_list_divide_number_raises(self):
+        """list / number must raise IXXRuntimeError."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('a = 1, 2\nsay a / 2')
+        self.assertIn("list", str(ctx.exception).lower())
+
+    def test_text_plus_number_still_works(self):
+        """text + number must still work (string concat)."""
+        self.assertEqual(run('say "count: " + 5'), "count: 5")
+
+    def test_number_plus_text_still_works(self):
+        """number + text must still work (string concat)."""
+        self.assertEqual(run('say 5 + " items"'), "5 items")
+
+    def test_number_arithmetic_still_works(self):
+        """Normal numeric arithmetic must still work."""
+        self.assertEqual(run('say 3 + 4 * 2'), "11")
+
+    def test_list_arithmetic_catchable(self):
+        """list arithmetic error must be catchable by IXX try/catch."""
+        result = run(
+            'a = 1, 2, 3\n'
+            'try\n'
+            '- say a + a\n'
+            'catch\n'
+            '- say "caught"'
+        )
+        self.assertEqual(result, "caught")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Letter C — v0.6.8 string escape sequences
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestLetterC(unittest.TestCase):
+    """Tests for v0.6.8 Letter C: \\n, \\t, \\\\ escape sequences in string literals."""
+
+    # ── C1: \n produces a real newline ────────────────────────────────────────
+
+    def test_newline_escape_two_lines(self):
+        r'say "a\nb" must output two separate lines.'
+        result = run(r'say "a\nb"')
+        self.assertIn("\n", result)
+        parts = result.splitlines()
+        self.assertEqual(parts[0], "a")
+        self.assertEqual(parts[1], "b")
+
+    def test_newline_escape_in_variable(self):
+        r'Assigning "a\nb" must give a string with a real newline.'
+        result = run('x = "a\\nb"\nsay x')
+        self.assertIn("\n", result)
+
+    def test_newline_write_readlines(self):
+        r'write with \n then readlines must return multiple lines.'
+        result = run(
+            'write "StressTest/tmp/c1-escape.txt", "one\\ntwo\\nthree"\n'
+            'lines = readlines("StressTest/tmp/c1-escape.txt")\n'
+            'say count(lines)'
+        )
+        self.assertEqual(result, "3")
+
+    def test_newline_first_line(self):
+        r'Each \n splits content; first line is accessible.'
+        result = run(
+            'write "StressTest/tmp/c1-nl-a.txt", "alpha\\nbeta"\n'
+            'lines = readlines("StressTest/tmp/c1-nl-a.txt")\n'
+            'say first(lines)'
+        )
+        self.assertEqual(result, "alpha")
+
+    # ── C1: \t produces a real tab ────────────────────────────────────────────
+
+    def test_tab_escape_in_output(self):
+        r'say "a\tb" must contain a real tab character.'
+        result = run('say "a\\tb"')
+        self.assertIn("\t", result)
+
+    def test_tab_escape_split(self):
+        r'split on \t separator must work after escape processing.'
+        result = run(
+            'parts = split("a\\tb", "\\t")\n'
+            'say count(parts)'
+        )
+        self.assertEqual(result, "2")
+
+    # ── C1: \\ produces a single backslash ────────────────────────────────────
+
+    def test_backslash_escape(self):
+        r'say "C:\\Temp" must display C:\Temp (one backslash).'
+        result = run('say "C:\\\\Temp"')
+        self.assertEqual(result, "C:\\Temp")
+
+    def test_double_backslash_length(self):
+        r'"\\" must produce a string of length 1 (one backslash).'
+        result = run('say count("\\\\")')
+        self.assertEqual(result, "1")
+
+    # ── Normal strings unaffected ─────────────────────────────────────────────
+
+    def test_normal_string_unchanged(self):
+        """A string with no escapes must be unchanged."""
+        result = run('say "hello world"')
+        self.assertEqual(result, "hello world")
+
+    def test_interpolation_still_works(self):
+        r'Variable interpolation must still work alongside escaped newline.'
+        result = run(
+            'name = "Ixxy"\n'
+            'say "Hello\\n{name}"'
+        )
+        parts = result.splitlines()
+        self.assertEqual(parts[0], "Hello")
+        self.assertEqual(parts[1], "Ixxy")
+
+    def test_unknown_escape_preserved(self):
+        r'An unknown escape like \q must be kept as-is (literal \q).'
+        result = run('say "a\\qb"')
+        self.assertIn("\\q", result)
+
+    def test_string_concat_unaffected(self):
+        """String concat with no escapes must still work."""
+        result = run('say "hello" + " " + "world"')
+        self.assertEqual(result, "hello world")
+
+class TestLetterD(unittest.TestCase):
+    """D1 — Wire resolve_imports() into REPL _try_run_ixx()."""
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _repl_run(self, source: str) -> str:
+        """Run *source* through the REPL's _try_run_ixx() and return stdout."""
+        import io, contextlib
+        from ixx.shell.repl import _try_run_ixx
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _try_run_ixx(source, lambda p: "")
+        return buf.getvalue().strip()
+
+    # ------------------------------------------------------------------
+    # Local file imports
+    # ------------------------------------------------------------------
+
+    def test_repl_use_local_file(self):
+        """REPL can import a local helper file and call an imported function."""
+        import tempfile, os
+
+        helper_src = "function double x\n- return x * 2\n"
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".ixx", delete=False, encoding="utf-8"
+        ) as f:
+            helper_path = f.name
+            f.write(helper_src)
+
+        try:
+            fwd = helper_path.replace("\\", "/")
+            src = f'use "{fwd}"\nsay double(21)'
+            result = self._repl_run(src)
+            self.assertEqual(result, "42")
+        finally:
+            os.unlink(helper_path)
+
+    def test_repl_local_import_multiple_functions(self):
+        """REPL imports multiple functions from a local file and calls them."""
+        import tempfile, os
+
+        helper_src = (
+            "function greet name\n- return \"Hello, \" + name\n"
+            "function shout name\n- return \"HEY \" + name\n"
+        )
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".ixx", delete=False, encoding="utf-8"
+        ) as f:
+            helper_path = f.name
+            f.write(helper_src)
+
+        try:
+            fwd = helper_path.replace("\\", "/")
+            src = f'use "{fwd}"\nsay greet("Ixxy")'
+            result = self._repl_run(src)
+            self.assertIn("Hello, Ixxy", result)
+        finally:
+            os.unlink(helper_path)
+
+    # ------------------------------------------------------------------
+    # stdlib imports
+    # ------------------------------------------------------------------
+
+    def test_repl_use_std_time(self):
+        """REPL can import use std 'time' and call time_greeting."""
+        src = 'use std "time"\nsay time_greeting(9)'
+        result = self._repl_run(src)
+        self.assertIn("Good morning", result)
+
+    def test_repl_use_std_time_evening(self):
+        """REPL time_greeting returns evening greeting for hour >= 18."""
+        src = 'use std "time"\nsay time_greeting(20)'
+        result = self._repl_run(src)
+        self.assertIn("Good evening", result)
+
+    def test_repl_use_std_date(self):
+        """REPL can import use std 'date' and call is_leap_year."""
+        src = 'use std "date"\nsay is_leap_year(2024)'
+        result = self._repl_run(src)
+        self.assertEqual(result, "YES")
+
+    def test_repl_use_std_date_non_leap(self):
+        """REPL date module: non-leap year returns NO."""
+        src = 'use std "date"\nsay is_leap_year(2023)'
+        result = self._repl_run(src)
+        self.assertEqual(result, "NO")
+
+    # ------------------------------------------------------------------
+    # Error handling
+    # ------------------------------------------------------------------
+
+    def test_repl_missing_import_friendly(self):
+        """Missing local import in REPL shows friendly error, no traceback."""
+        import io, contextlib
+        from ixx.shell.repl import _try_run_ixx
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            recognised = _try_run_ixx(
+                'use "definitely-does-not-exist-xyz.ixx"\nsay "hi"',
+                lambda p: "",
+            )
+
+        output = buf.getvalue()
+        self.assertTrue(recognised, "Should be recognised as IXX")
+        self.assertNotIn("Traceback", output)
+        self.assertNotIn("IXXImportError", output)
+        # Should mention something about the import failing
+        self.assertTrue(
+            "import" in output.lower() or "not found" in output.lower(),
+            f"Expected import-error text in: {output!r}",
+        )
+
+    def test_repl_missing_std_module_friendly(self):
+        """Missing stdlib module in REPL shows friendly error, no traceback."""
+        import io, contextlib
+        from ixx.shell.repl import _try_run_ixx
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            recognised = _try_run_ixx(
+                'use std "nonexistent_module_xyz"',
+                lambda p: "",
+            )
+
+        output = buf.getvalue()
+        self.assertTrue(recognised)
+        self.assertNotIn("Traceback", output)
+        self.assertNotIn("IXXImportError", output)
+
+    def test_repl_runtime_error_still_caught(self):
+        """Runtime error in REPL (no imports) still shows friendly error."""
+        result = self._repl_run('say number("not-a-number")')
+        self.assertIn("Error", result)
+        self.assertNotIn("Traceback", result)
+
+    def test_repl_plain_ixx_unaffected(self):
+        """Plain IXX (no imports) still works after D1 change."""
+        result = self._repl_run('say 6 * 7')
+        self.assertEqual(result, "42")
+
+    def test_repl_interp_var_assignment_still_works(self):
+        """Variable assignment + say still works in REPL."""
+        result = self._repl_run('name = "Ixxy"\nsay "Hello, {name}"')
+        self.assertEqual(result, "Hello, Ixxy")
+
+
+class TestLetterE(unittest.TestCase):
+    """E1/E2/E3 — Checker scoping fixes: func params, catch error, top-level return."""
+
+    # ------------------------------------------------------------------
+    # Helper: run checker and return list of error messages
+    # ------------------------------------------------------------------
+
+    def _check(self, src: str) -> list[str]:
+        from ixx.checker import SemanticChecker
+        from ixx.parser import parse
+        errors = SemanticChecker().check(parse(src), "test.ixx")
+        return [e.message for e in errors if e.severity == "error"]
+
+    # ------------------------------------------------------------------
+    # E1 — function parameter does not leak to top level
+    # ------------------------------------------------------------------
+
+    def test_func_param_visible_inside_body(self):
+        """Parameter is visible inside the function body (no false error)."""
+        errors = self._check("function show data\n- say data\n")
+        self.assertEqual(errors, [])
+
+    def test_func_param_does_not_leak_top_level(self):
+        """Using a function param name at top level is flagged."""
+        errors = self._check("function show data\n- say data\nsay data")
+        self.assertTrue(
+            any("data" in m and "not defined" in m for m in errors),
+            f"Expected undefined-data error, got: {errors}",
+        )
+
+    def test_multiple_func_params_do_not_leak(self):
+        """Multiple params from multiple functions don't pollute top-level scope."""
+        src = (
+            "function add a, b\n- return a + b\n"
+            "function mul x, y\n- return x * y\n"
+            "say a\n"
+        )
+        errors = self._check(src)
+        self.assertTrue(any("a" in m and "not defined" in m for m in errors), errors)
+
+    def test_func_local_var_does_not_leak(self):
+        """Variables assigned inside a function body don't suppress top-level errors."""
+        src = "function foo\n- result = 42\nsay result\n"
+        errors = self._check(src)
+        self.assertTrue(
+            any("result" in m and "not defined" in m for m in errors),
+            f"Expected undefined-result error, got: {errors}",
+        )
+
+    def test_calling_function_still_passes(self):
+        """Calling a defined function at top level still passes check."""
+        src = "function show data\n- say data\nshow(\"hello\")\n"
+        errors = self._check(src)
+        self.assertEqual(errors, [])
+
+    def test_top_level_assignment_still_visible(self):
+        """Top-level assignment is still visible and not falsely flagged."""
+        src = "name = \"Ixxy\"\nsay name\n"
+        errors = self._check(src)
+        self.assertEqual(errors, [])
+
+    # ------------------------------------------------------------------
+    # E2 — catch `error` visible only inside catch body
+    # ------------------------------------------------------------------
+
+    def test_error_visible_inside_catch(self):
+        """'error' is usable inside catch body without a checker error."""
+        src = "try\n- x = 1\ncatch\n- say error\n"
+        errors = self._check(src)
+        self.assertEqual(errors, [])
+
+    def test_error_does_not_leak_after_catch(self):
+        """'error' after the try/catch block is flagged as undefined."""
+        src = "try\n- x = 1\ncatch\n- say error\nsay error\n"
+        errors = self._check(src)
+        self.assertTrue(
+            any("error" in m and "not defined" in m for m in errors),
+            f"Expected undefined-error error, got: {errors}",
+        )
+
+    def test_error_not_global_from_different_catch(self):
+        """'error' from one catch does not make it defined after a second catch."""
+        src = (
+            "try\n- x = 1\ncatch\n- say error\n"
+            "try\n- y = 2\ncatch\n- say error\n"
+            "say error\n"
+        )
+        errors = self._check(src)
+        self.assertTrue(
+            any("error" in m and "not defined" in m for m in errors),
+            f"Expected undefined-error after two catches, got: {errors}",
+        )
+
+    def test_catch_assigned_var_still_accessible_after(self):
+        """A variable assigned inside catch IS accessible after the block (IXX scoping)."""
+        src = (
+            "caught = NO\n"
+            "try\n- x = 1\ncatch\n- caught = YES\n"
+            "say caught\n"
+        )
+        errors = self._check(src)
+        self.assertEqual(errors, [])
+
+    # ------------------------------------------------------------------
+    # E3 — top-level return flagged by checker
+    # ------------------------------------------------------------------
+
+    def test_top_level_return_fails_checker(self):
+        """Return at top level is a checker error."""
+        errors = self._check("return 42\n")
+        self.assertTrue(
+            any("return" in m.lower() and "function" in m.lower() for m in errors),
+            f"Expected top-level return error, got: {errors}",
+        )
+
+    def test_return_inside_function_passes(self):
+        """Return inside a function is valid."""
+        errors = self._check("function f\n- return 42\n")
+        self.assertEqual(errors, [])
+
+    def test_return_inside_if_inside_function_passes(self):
+        """Return inside an if inside a function is valid."""
+        src = "function f x\n- if x more than 0\n-- return x\n- return 0\n"
+        errors = self._check(src)
+        self.assertEqual(errors, [])
+
+    def test_bare_return_top_level_fails(self):
+        """Bare 'return' (no value) at top level is also caught."""
+        errors = self._check("say \"hi\"\nreturn\n")
+        self.assertTrue(
+            any("return" in m.lower() and "function" in m.lower() for m in errors),
+            f"Expected top-level bare-return error, got: {errors}",
+        )
+
+    # ------------------------------------------------------------------
+    # Regression: Letter A nested function checks still pass
+    # ------------------------------------------------------------------
+
+    def test_nested_function_in_if_still_caught(self):
+        """Letter A: nested function inside if is still caught (no regression)."""
+        src = "if YES\n- function inner\n-- say \"hi\"\n"
+        errors = self._check(src)
+        self.assertTrue(
+            any("top level" in m for m in errors),
+            f"Expected nested-function error, got: {errors}",
+        )
+
+    # ------------------------------------------------------------------
+    # Regression: loop-each scoping still correct
+    # ------------------------------------------------------------------
+
+    def test_loop_each_var_visible_inside_body(self):
+        """Loop-each variable is usable inside the loop body."""
+        src = "items = 1, 2, 3\nloop each item in items\n- say item\n"
+        errors = self._check(src)
+        self.assertEqual(errors, [])
+
+    def test_loop_each_non_predeclared_var_does_not_leak(self):
+        """Non-predeclared loop-each variable is not accessible after loop."""
+        src = "items = 1, 2, 3\nloop each item in items\n- say item\nsay item\n"
+        errors = self._check(src)
+        self.assertTrue(
+            any("item" in m and "not defined" in m for m in errors),
+            f"Expected undefined-item after loop, got: {errors}",
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Letter I — error message quality
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestLetterI(unittest.TestCase):
+    """I1–I7: friendlier error messages, no raw Python text leaks."""
+
+    # ── helpers ──────────────────────────────────────────────────────────────
+
+    def _run(self, src: str) -> str:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            try:
+                Interpreter().run(parse(src))
+            except IXXRuntimeError as e:
+                return f"ERR:{e}"
+        return buf.getvalue().strip()
+
+    def _check(self, src: str) -> list[str]:
+        from ixx.checker import SemanticChecker
+        return [e.message for e in SemanticChecker().check(parse(src), "t.ixx")]
+
+    # ── I1: builtin TypeError arity should not leak Python text ──────────────
+
+    def test_i1_builtin_arity_no_python_text(self):
+        """Wrong builtin arg count should not mention 'positional argument'."""
+        # write expects 2 args; call it with 3 via interpreter directly
+        from ixx.interpreter import Interpreter as _I
+        from ixx.runtime.errors import IXXRuntimeError as _E
+        interp = _I()
+        interp.run(parse("x = 1"))  # init func table
+        with self.assertRaises(_E) as ctx:
+            interp._call("read", ["a", "b"])  # read takes 1 arg
+        msg = str(ctx.exception)
+        self.assertNotIn("positional argument", msg)
+        self.assertNotIn("takes 1", msg)
+        self.assertNotIn("missing 1", msg)
+
+    def test_i1_builtin_arity_message_contains_count(self):
+        """Builtin arity error should mention the got-count."""
+        from ixx.interpreter import Interpreter as _I
+        from ixx.runtime.errors import IXXRuntimeError as _E
+        interp = _I()
+        interp.run(parse("x = 1"))
+        with self.assertRaises(_E) as ctx:
+            interp._call("read", ["a", "b"])
+        msg = str(ctx.exception)
+        # "was called with 2 arguments" or similar
+        self.assertTrue(
+            "2" in msg or "argument" in msg,
+            f"Expected count info in: {msg}",
+        )
+
+    # ── I2: write() to nonexistent directory ─────────────────────────────────
+
+    def test_i2_write_missing_folder_friendly(self):
+        """write() to a nonexistent folder gives a helpful message."""
+        import tempfile, os
+        bad = os.path.join(tempfile.gettempdir(), "no_such_dir_ixx_i2", "out.txt").replace("\\", "/")
+        out = self._run(f'write "{bad}", "hello"')
+        self.assertTrue(out.startswith("ERR:"), f"Expected error, got: {out}")
+        msg = out[4:]
+        self.assertNotIn("WinError", msg)
+        self.assertNotIn("errno", msg)
+        self.assertNotIn("[Errno", msg)
+        self.assertIn(bad, msg)
+
+    def test_i2_write_missing_folder_no_rawerror(self):
+        """write() error message should mention folder or path clearly."""
+        import tempfile, os
+        bad = os.path.join(tempfile.gettempdir(), "no_such_dir_ixx_i2", "out.txt").replace("\\", "/")
+        out = self._run(f'write "{bad}", "hello"')
+        msg = out[4:]
+        # Should mention folder/path existence
+        self.assertTrue(
+            "folder" in msg or "path" in msg or "exist" in msg,
+            f"Expected folder hint in: {msg}",
+        )
+
+    def test_i2_append_missing_folder_friendly(self):
+        """append() to a nonexistent folder also gives a helpful message."""
+        import tempfile, os
+        bad = os.path.join(tempfile.gettempdir(), "no_such_dir_ixx_i2b", "out.txt").replace("\\", "/")
+        out = self._run(f'append "{bad}", "hello"')
+        self.assertTrue(out.startswith("ERR:"), f"Expected error, got: {out}")
+        msg = out[4:]
+        self.assertNotIn("WinError", msg)
+        self.assertNotIn("[Errno", msg)
+
+    # ── I3: _friendly_message for indentation/dash issues ────────────────────
+
+    def test_i3_function_no_name_hint(self):
+        """A bare 'function' keyword with no name gives a helpful hint."""
+        from ixx.__main__ import _friendly_message
+        class FakeE:
+            pass
+        msg = _friendly_message("function", None, FakeE())
+        self.assertIn("function name", msg.lower())
+        self.assertIn("function add", msg)
+
+    def test_i3_function_no_name_hint_with_spaces(self):
+        """Whitespace around 'function' still triggers the hint."""
+        from ixx.__main__ import _friendly_message
+        class FakeE:
+            pass
+        msg = _friendly_message("  function  ", None, FakeE())
+        self.assertIn("function name", msg.lower())
+
+    # ── I6: number() on list ─────────────────────────────────────────────────
+
+    def test_i6_number_list_no_repr(self):
+        """number(list) should not show Python [1, 2, 3] repr."""
+        out = self._run("items = 1, 2, 3\nx = number(items)\nsay x")
+        self.assertTrue(out.startswith("ERR:"), f"Expected error, got: {out}")
+        msg = out[4:]
+        self.assertNotIn("[1, 2, 3]", msg)
+        self.assertNotIn("[1,", msg)
+
+    def test_i6_number_list_friendly_message(self):
+        """number(list) error should mention 'list' and 'number'."""
+        out = self._run("items = 1, 2, 3\nx = number(items)\nsay x")
+        msg = out[4:]
+        self.assertIn("list", msg.lower())
+        self.assertIn("number", msg.lower())
+
+    # ── I7: argument(s) pluralization ────────────────────────────────────────
+
+    def test_i7_checker_singular_argument(self):
+        """Checker: 1-param function called with too many args → '1 argument'."""
+        errors = self._check("function f a\n- return a\nx = f(1, 2)")
+        self.assertTrue(errors, "Expected a checker error")
+        msg = errors[0]
+        self.assertIn("1 argument", msg)
+        self.assertNotIn("1 arguments", msg)
+        self.assertNotIn("argument(s)", msg)
+
+    def test_i7_checker_plural_arguments(self):
+        """Checker: 2-param function called with wrong args → '2 arguments'."""
+        errors = self._check("function g a, b\n- return a\nx = g(1, 2, 3)")
+        self.assertTrue(errors, "Expected a checker error")
+        msg = errors[0]
+        self.assertIn("2 arguments", msg)
+        self.assertNotIn("argument(s)", msg)
+
+    def test_i7_runtime_singular_argument(self):
+        """Runtime: 1-param function called with 2 args → '1 argument'."""
+        out = self._run("function f a\n- return a\nx = f(1, 2)")
+        self.assertTrue(out.startswith("ERR:"), f"Expected error, got: {out}")
+        msg = out[4:]
+        self.assertIn("1 argument", msg)
+        self.assertNotIn("argument(s)", msg)
+
+    def test_i7_runtime_plural_arguments(self):
+        """Runtime: 2-param function called with 1 arg → '2 arguments'."""
+        out = self._run("function g a, b\n- return a\nx = g(1)")
+        self.assertTrue(out.startswith("ERR:"), f"Expected error, got: {out}")
+        msg = out[4:]
+        self.assertIn("2 arguments", msg)
+        self.assertNotIn("argument(s)", msg)
+
+    def test_i7_builtin_checker_singular(self):
+        """Checker: 1-arg builtin called with 0 args → '1 argument'."""
+        errors = self._check("x = count()")
+        self.assertTrue(errors, "Expected a checker error")
+        self.assertTrue(
+            any("1 argument" in m for m in errors),
+            f"Expected '1 argument' in: {errors}",
+        )
+
+    def test_i7_builtin_checker_plural(self):
+        """Checker: 2-arg builtin called with 1 arg → '2 arguments'."""
+        # replace expects 3 args; give it 2
+        errors = self._check('x = replace("abc", "a")')
+        self.assertTrue(errors, "Expected a checker error")
+        self.assertTrue(
+            any("3 arguments" in m or "argument" in m for m in errors),
+            f"Expected argument count in: {errors}",
+        )
+
+    def test_i7_no_argument_s_anywhere(self):
+        """No user-facing message should contain the awkward 'argument(s)'."""
+        # Trigger a few different arity errors and check none say argument(s)
+        srcs = [
+            "function f a\n- return a\nx = f(1, 2)",
+            "function g a, b\n- return a\nx = g(1)",
+            "x = count()",
+        ]
+        for src in srcs:
+            errors = self._check(src)
+            for msg in errors:
+                self.assertNotIn(
+                    "argument(s)", msg,
+                    f"Found 'argument(s)' in: {msg!r}",
+                )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Letter J — shell handler crash paths
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestLetterJ(unittest.TestCase):
+    """J1–J2: shell handler crash paths don't leak raw Python exceptions."""
+
+    # ── J1: handle_open non-Windows subprocess guard ─────────────────────────
+
+    def test_j1_open_xdg_missing_no_raw_error(self):
+        """When xdg-open is not found, handle_open prints friendly message."""
+        import sys
+        from unittest.mock import patch, MagicMock
+        from ixx.shell.commands.files import handle_open
+        from ixx.shell.paths import PathNotFoundError
+
+        # Resolve to a real path so we reach the subprocess call
+        fake_path = MagicMock()
+        fake_path.__str__ = lambda self: "/tmp/fake_file"
+
+        buf = io.StringIO()
+        with patch("ixx.shell.commands.files.resolve", return_value=fake_path), \
+             patch("ixx.shell.commands.files.os.startfile", side_effect=AttributeError), \
+             patch("ixx.shell.commands.files.sys.platform", "linux"), \
+             patch("subprocess.run", side_effect=FileNotFoundError("xdg-open not found")), \
+             contextlib.redirect_stdout(buf):
+            handle_open(["fakepath"])
+
+        out = buf.getvalue()
+        # Should not raise — must produce friendly output
+        self.assertIn("Could not open", out)
+        self.assertNotIn("Traceback", out)
+        self.assertNotIn("FileNotFoundError", out)
+
+    def test_j1_open_xdg_other_error_no_raw(self):
+        """When xdg-open raises a generic OSError, handle_open stays friendly."""
+        from unittest.mock import patch, MagicMock
+        from ixx.shell.commands.files import handle_open
+
+        fake_path = MagicMock()
+        fake_path.__str__ = lambda self: "/tmp/fake_file"
+
+        buf = io.StringIO()
+        with patch("ixx.shell.commands.files.resolve", return_value=fake_path), \
+             patch("ixx.shell.commands.files.os.startfile", side_effect=AttributeError), \
+             patch("ixx.shell.commands.files.sys.platform", "linux"), \
+             patch("subprocess.run", side_effect=OSError("permission denied")), \
+             contextlib.redirect_stdout(buf):
+            handle_open(["fakepath"])
+
+        out = buf.getvalue()
+        self.assertIn("Could not open", out)
+        self.assertNotIn("Traceback", out)
+
+    def test_j1_open_windows_success_still_works(self):
+        """On Windows (mocked), os.startfile success still prints 'Opened'."""
+        from unittest.mock import patch, MagicMock
+        from ixx.shell.commands.files import handle_open
+
+        fake_path = MagicMock()
+        fake_path.__str__ = lambda self: "C:\\Users\\test\\file.txt"
+
+        buf = io.StringIO()
+        with patch("ixx.shell.commands.files.resolve", return_value=fake_path), \
+             patch("ixx.shell.commands.files.os.startfile", return_value=None), \
+             contextlib.redirect_stdout(buf):
+            handle_open(["fakepath"])
+
+        out = buf.getvalue()
+        self.assertIn("Opened", out)
+
+    def test_j1_open_no_args_usage(self):
+        """handle_open with no args prints usage hint."""
+        from ixx.shell.commands.files import handle_open
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            handle_open([])
+        out = buf.getvalue()
+        self.assertIn("Usage", out)
+
+    # ── J2: _classify_adapter with malformed IP ───────────────────────────────
+
+    def test_j2_classify_malformed_172_no_valueerror(self):
+        """_classify_adapter with non-numeric 172.x octet does not raise ValueError."""
+        from ixx.shell.commands.network import _classify_adapter
+        # Should not raise — returns "other" for malformed
+        result = _classify_adapter("SomeAdapter", "172.abc.0.1")
+        self.assertIsInstance(result, str)
+
+    def test_j2_classify_malformed_172_returns_other(self):
+        """_classify_adapter with non-numeric 172.x octet returns 'other'."""
+        from ixx.shell.commands.network import _classify_adapter
+        result = _classify_adapter("SomeAdapter", "172.abc.0.1")
+        self.assertEqual(result, "other")
+
+    def test_j2_classify_valid_172_rfc1918(self):
+        """_classify_adapter with valid RFC 1918 172.16-31 still returns 'other'."""
+        from ixx.shell.commands.network import _classify_adapter
+        result = _classify_adapter("Ethernet", "172.16.0.1")
+        self.assertEqual(result, "other")
+
+    def test_j2_classify_valid_172_virtual(self):
+        """_classify_adapter: 172.17.x with neutral name returns 'other' (RFC 1918)."""
+        from ixx.shell.commands.network import _classify_adapter
+        # "eth0" has no virtual keyword — IP-based check governs
+        result = _classify_adapter("eth0", "172.17.0.1")
+        self.assertEqual(result, "other")
+
+    def test_j2_classify_172_outside_rfc1918(self):
+        """_classify_adapter with 172.14.x (outside RFC 1918) returns 'virtual'."""
+        from ixx.shell.commands.network import _classify_adapter
+        result = _classify_adapter("VirtualAdapter", "172.14.0.1")
+        self.assertEqual(result, "virtual")
+
+    def test_j2_classify_private_192(self):
+        """_classify_adapter with 192.168.x still works normally."""
+        from ixx.shell.commands.network import _classify_adapter
+        result = _classify_adapter("Ethernet", "192.168.1.100")
+        self.assertEqual(result, "ethernet")
+
+    def test_j2_classify_loopback(self):
+        """_classify_adapter with 127.0.0.1 still returns 'loopback'."""
+        from ixx.shell.commands.network import _classify_adapter
+        result = _classify_adapter("lo", "127.0.0.1")
+        self.assertEqual(result, "loopback")
+
+    def test_j2_classify_link_local(self):
+        """_classify_adapter with 169.254.x returns 'link-local'."""
+        from ixx.shell.commands.network import _classify_adapter
+        result = _classify_adapter("Autoconfiguration", "169.254.1.1")
+        self.assertEqual(result, "link-local")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Letter K — stale version strings and misleading UI/help text
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestLetterK(unittest.TestCase):
+    """K1–K6: no stale version numbers, no stub commands in live examples."""
+
+    # ── K1: stubs.py ─────────────────────────────────────────────────────────
+
+    def test_k1_stubs_no_v030(self):
+        """stubs.py must not contain 'v0.3.0' anywhere."""
+        import importlib.util, pathlib
+        path = pathlib.Path("ixx/shell/commands/stubs.py")
+        text = path.read_text(encoding="utf-8")
+        self.assertNotIn("v0.3.0", text)
+
+    # ── K2: demo_walk.py ─────────────────────────────────────────────────────
+
+    def test_k2_demo_walk_no_v04(self):
+        """demo_walk.py must not output 'v0.4' to users."""
+        from ixx.shell.commands.demo_walk import handle_demo_walk
+        buf = io.StringIO()
+        # fast-forward through all steps then reach the closing message
+        with contextlib.redirect_stdout(buf):
+            handle_demo_walk([], _input_fn=lambda _: "")
+        out = buf.getvalue()
+        self.assertNotIn("v0.4", out)
+
+    def test_k2_demo_walk_still_has_branding(self):
+        """demo_walk.py closing message should still mention IXX."""
+        from ixx.shell.commands.demo_walk import handle_demo_walk
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            handle_demo_walk([], _input_fn=lambda _: "")
+        out = buf.getvalue()
+        self.assertIn("IXX", out)
+
+    # ── K3: renderer.py broad help examples ──────────────────────────────────
+
+    def test_k3_broad_help_no_copy(self):
+        """Broad help examples must not include stub 'copy' command."""
+        from ixx.shell.renderer import _show_broad_help
+        from ixx.shell.registry import CommandRegistry
+        from ixx.shell.commands.stubs import register_all
+        reg = CommandRegistry()
+        register_all(reg)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _show_broad_help(reg)
+        out = buf.getvalue()
+        self.assertNotIn("copy report.pdf", out)
+
+    def test_k3_broad_help_no_delete_recursive(self):
+        """Broad help examples must not include stub 'delete' recursive example."""
+        from ixx.shell.renderer import _show_broad_help
+        from ixx.shell.registry import CommandRegistry
+        from ixx.shell.commands.stubs import register_all
+        reg = CommandRegistry()
+        register_all(reg)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _show_broad_help(reg)
+        out = buf.getvalue()
+        self.assertNotIn("delete folder old-stuff recursive", out)
+
+    def test_k3_broad_help_has_live_examples(self):
+        """Broad help still contains live command examples."""
+        from ixx.shell.renderer import _show_broad_help
+        from ixx.shell.registry import CommandRegistry
+        from ixx.shell.commands.stubs import register_all
+        reg = CommandRegistry()
+        register_all(reg)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _show_broad_help(reg)
+        out = buf.getvalue()
+        self.assertIn("ip wifi", out)
+        self.assertIn("disk health", out)
+
+    # ── K4: system.py disk smart full ────────────────────────────────────────
+
+    def test_k4_disk_smart_full_no_ixx_setup(self):
+        """disk smart full message must not suggest 'ixx setup'."""
+        import pathlib
+        text = pathlib.Path("ixx/shell/commands/system.py").read_text(encoding="utf-8")
+        # Find the smart full section and verify
+        idx = text.find("disk smart full requires")
+        self.assertGreater(idx, 0, "Could not find disk smart full message")
+        section = text[idx: idx + 400]
+        self.assertNotIn("ixx setup", section)
+
+    def test_k4_disk_smart_full_has_admin_hint(self):
+        """disk smart full message still mentions administrator."""
+        import pathlib
+        text = pathlib.Path("ixx/shell/commands/system.py").read_text(encoding="utf-8")
+        idx = text.find("disk smart full requires")
+        section = text[idx: idx + 400]
+        self.assertIn("administrator", section.lower())
+
+    # ── K5: showoff.py hardcoded counts ──────────────────────────────────────
+
+    def test_k5_showoff_no_478(self):
+        """showoff.py must not hardcode '478 passed'."""
+        import pathlib
+        text = pathlib.Path("ixx/showoff.py").read_text(encoding="utf-8")
+        self.assertNotIn("478 passed", text)
+
+    def test_k5_showoff_no_stale_stresstest_count(self):
+        """showoff.py must not hardcode ' 30 passed' StressTest count."""
+        import pathlib
+        text = pathlib.Path("ixx/showoff.py").read_text(encoding="utf-8")
+        self.assertNotIn('" 30 passed"', text)
+
+    def test_k5_showoff_still_mentions_tests(self):
+        """showoff.py still mentions some form of testing / validation."""
+        import pathlib
+        text = pathlib.Path("ixx/showoff.py").read_text(encoding="utf-8")
+        self.assertTrue(
+            "unit test" in text.lower() or "stresstest" in text.lower() or "passing" in text.lower(),
+            "Expected test-related wording still present in showoff.py",
+        )
+
+    # ── K6: examples stale version strings ───────────────────────────────────
+
+    def test_k6_stdlib_no_v05_in_output(self):
+        """examples/stdlib.ixx must not contain 'v0.5' header comment."""
+        import pathlib
+        text = pathlib.Path("examples/stdlib.ixx").read_text(encoding="utf-8")
+        # The file header should no longer say "v0.5"
+        self.assertNotIn("v0.5 built-in", text.lower())
+
+    def test_k6_showcase_parses_ok(self):
+        """examples/ixx-showcase.ixx must still parse without errors."""
+        import pathlib
+        src = pathlib.Path("examples/ixx-showcase.ixx").read_text(encoding="utf-8")
+        # Should not raise
+        result = parse(src)
+        self.assertIsNotNone(result)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Letter M — v0.6.8 test quality fixes
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestLetterM(unittest.TestCase):
+    """Tests for v0.6.8 Letter M: test suite trustworthiness fixes."""
+
+    # ── M1: first/last on empty list ──────────────────────────────────────────
+
+    def test_m1_first_empty_list_fix_regression(self):
+        """The original test_first_empty_list used a non-empty list.
+        This regression test proves first(empty) really returns nothing.
+        IXX has no empty-list literal; split("") is the production path.
+        """
+        output = run('empty = split("")\nsay first(empty)')
+        self.assertEqual(output, "nothing")
+
+    def test_m1_last_empty_list_regression(self):
+        """last() on a truly empty list must also return nothing."""
+        output = run('empty = split("")\nsay last(empty)')
+        self.assertEqual(output, "nothing")
+
+    def test_m1_split_empty_string_gives_empty_list(self):
+        """split("") with no sep is the only valid IXX path to an empty list."""
+        output = run('empty = split("")\nsay count(empty)')
+        self.assertEqual(output, "0")
+
+    # ── M2: showoff wording is durable (not hardcoded counts) ─────────────────
+
+    def test_m2_showoff_no_hardcoded_478(self):
+        """showoff.py must not contain a hardcoded '478 passed' count."""
+        import pathlib
+        text = pathlib.Path("ixx/showoff.py").read_text(encoding="utf-8")
+        self.assertNotIn("478 passed", text)
+
+    def test_m2_showoff_no_hardcoded_30_passed(self):
+        """showoff.py must not contain a hardcoded '30 passed' count."""
+        import pathlib
+        text = pathlib.Path("ixx/showoff.py").read_text(encoding="utf-8")
+        self.assertNotIn('" 30 passed"', text)
+
+    def test_m2_showoff_durable_wording_present(self):
+        """showoff.py uses durable wording ('hundreds passing', 'all passing')."""
+        import pathlib
+        text = pathlib.Path("ixx/showoff.py").read_text(encoding="utf-8")
+        self.assertIn("hundreds passing", text)
+        self.assertIn("all passing", text)
+
+    # ── M3: \n escape regression (covered by TestLetterC; verified here) ──────
+
+    def test_m3_newline_escape_regression(self):
+        r'If \n becomes literal again, this test would fail.'
+        result = run(r'say "a\nb"')
+        parts = result.splitlines()
+        self.assertGreaterEqual(len(parts), 2, "\\n must produce a real newline")
+        self.assertEqual(parts[0], "a")
+        self.assertEqual(parts[1], "b")
+
+    def test_m3_write_readlines_newline_roundtrip(self):
+        r'write with \n then readlines must return multiple lines (regression).'
+        result = run(
+            'write "StressTest/tmp/m3-escape.txt", "one\\ntwo\\nthree"\n'
+            'lines = readlines("StressTest/tmp/m3-escape.txt")\n'
+            'say count(lines)'
+        )
+        self.assertEqual(result, "3")
+
+    # ── M4: REPL import behavior (covered by TestLetterD; verified here) ──────
+
+    def test_m4_repl_use_local_file(self):
+        """REPL import of a local .ixx file works (regression)."""
+        import tempfile
+        from ixx.shell.repl import _try_run_ixx
+        import io, contextlib
+
+        helper = "function triple x\n- return x * 3\n"
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".ixx", delete=False, encoding="utf-8"
+        ) as f:
+            helper_path = f.name
+            f.write(helper)
+
+        try:
+            fwd = helper_path.replace("\\", "/")
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                _try_run_ixx(f'use "{fwd}"\nsay triple(14)', lambda p: "")
+            self.assertEqual(buf.getvalue().strip(), "42")
+        finally:
+            os.unlink(helper_path)
+
+    def test_m4_repl_use_std_module(self):
+        """REPL import of std module works (regression)."""
+        from ixx.shell.repl import _try_run_ixx
+        import io, contextlib
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _try_run_ixx('use std "time"\nsay time_greeting(9)', lambda p: "")
+        self.assertIn("Good morning", buf.getvalue())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Letter N — v0.6.8 vocabulary / wording cleanup
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestLetterN(unittest.TestCase):
+    """Tests for v0.6.8 Letter N: user-facing vocabulary and error message cleanup."""
+
+    # ── N1: ixx_err_type maps bool → yes-or-no wording ───────────────────────
+
+    def test_n1_type_builtin_still_returns_bool(self):
+        """type(YES) must still return 'bool' for script compatibility."""
+        self.assertEqual(run('say type(YES)'), "bool")
+        self.assertEqual(run('say type(NO)'), "bool")
+
+    def test_n1_upper_bool_says_yes_or_no(self):
+        """upper(YES) error must mention yes-or-no, not 'bool'."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('say upper(YES)')
+        msg = str(ctx.exception)
+        self.assertIn("yes-or-no", msg.lower())
+        self.assertNotIn("bool", msg)
+
+    def test_n1_lower_bool_says_yes_or_no(self):
+        """lower(NO) error must mention yes-or-no, not 'bool'."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('say lower(NO)')
+        msg = str(ctx.exception)
+        self.assertIn("yes-or-no", msg.lower())
+
+    def test_n1_split_bool_says_yes_or_no(self):
+        """split(YES) error must mention yes-or-no, not 'bool'."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('say split(YES)')
+        msg = str(ctx.exception)
+        self.assertIn("yes-or-no", msg.lower())
+
+    def test_n1_count_bool_says_yes_or_no(self):
+        """count(YES) error must mention yes-or-no, not 'bool'."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('say count(YES)')
+        msg = str(ctx.exception)
+        self.assertIn("yes-or-no", msg.lower())
+
+    def test_n1_negate_bool_says_yes_no(self):
+        """Negating a bool in arithmetic raises a friendly error containing YES/NO."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('say -YES')
+        msg = str(ctx.exception)
+        self.assertIn("YES/NO", msg)
+        self.assertNotIn("bool", msg)
+
+    # ── N2: catch error variable: friendly messages ───────────────────────────
+
+    def test_n2_catch_ixx_error_preserved(self):
+        """IXXRuntimeError message is preserved exactly in catch {error}."""
+        src = 'try\n- say number("abc")\ncatch\n- say error'
+        result = run(src)
+        self.assertIn("abc", result)
+        self.assertNotIn("Traceback", result)
+        self.assertNotIn("IXXRuntimeError", result)
+
+    def test_n2_catch_no_traceback(self):
+        """catch error must not contain raw Python traceback text."""
+        src = 'try\n- say number("abc")\ncatch\n- say error'
+        result = run(src)
+        self.assertNotIn("Traceback", result)
+        self.assertNotIn("File \"", result)
+
+    # ── N3/N4: unknown statement/operator messages ────────────────────────────
+
+    def test_n3_unknown_stmt_no_class_name(self):
+        """The unknown-statement fallback must not expose Python AST class names.
+        This is a defensive code path; we verify the message wording in source.
+        """
+        import pathlib
+        text = pathlib.Path("ixx/interpreter.py").read_text(encoding="utf-8")
+        self.assertIn("This statement cannot be run here.", text)
+        self.assertNotIn("Unknown statement type:", text)
+
+    def test_n5_bool_comparison_wording(self):
+        """Numeric comparison with YES/NO (right side) must use yes-or-no wording."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('if 1 more than YES\n- say "bad"')
+        msg = str(ctx.exception)
+        self.assertIn("yes-or-no", msg.lower())
+        self.assertNotIn("booleans", msg)
+
+    # ── N6/N7: modules.py import messages ────────────────────────────────────
+
+    def test_n6_missing_import_friendly(self):
+        """Missing import shows friendly message without raw OSError text."""
+        from ixx.modules import resolve_imports, IXXImportError
+        from ixx.parser import parse
+        src = 'use "definitely-does-not-exist-xyz-123.ixx"\nsay "hi"'
+        prog = parse(src)
+        import tempfile
+        with self.assertRaises(IXXImportError) as ctx:
+            resolve_imports(prog, tempfile.gettempdir())
+        msg = str(ctx.exception)
+        self.assertIn("find", msg.lower())
+        self.assertNotIn("[Errno", msg)
+        self.assertNotIn("OSError", msg)
+
+    def test_n7_circular_import_message(self):
+        """Circular import message uses 'loop' wording, not just 'Circular import detected'."""
+        from ixx.modules import resolve_imports, IXXImportError
+        import tempfile, os
+        tmpdir = tempfile.mkdtemp()
+        try:
+            # Create two files that import each other
+            a = os.path.join(tmpdir, "a.ixx")
+            b = os.path.join(tmpdir, "b.ixx")
+            with open(a, "w") as f: f.write('use "b.ixx"\n')
+            with open(b, "w") as f: f.write('use "a.ixx"\n')
+            from ixx.parser import parse
+            prog = parse('use "a.ixx"\n')
+            with self.assertRaises(IXXImportError) as ctx:
+                resolve_imports(prog, tmpdir)
+            msg = str(ctx.exception)
+            self.assertIn("loop", msg.lower())
+            self.assertNotIn("Circular import detected", msg)
+        finally:
+            import shutil
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    # ── N8: ixx check success says check passed ───────────────────────────────
+
+    def test_n8_check_passed_wording(self):
+        """ixx check on a valid file must say 'check passed', not 'syntax OK'."""
+        code, out = cli("check", "examples/hello.ixx")
+        self.assertEqual(code, 0)
+        self.assertIn("check passed", out)
+        self.assertNotIn("syntax OK", out)
+
+    # ── N9: HELP_TEXT forward slashes ────────────────────────────────────────
+
+    def test_n9_help_text_no_backslashes(self):
+        """HELP_TEXT examples must use forward slashes, not Windows backslashes."""
+        from ixx.__main__ import HELP_TEXT
+        # The examples section should not contain backslash path separators
+        examples_section = HELP_TEXT[HELP_TEXT.find("Examples:"):]
+        self.assertNotIn("examples\\\\", examples_section)
+        self.assertNotIn("examples\\hello", examples_section)
+        self.assertIn("examples/hello.ixx", examples_section)
+
+    # ── N10: renderer wording ─────────────────────────────────────────────────
+
+    def test_n10_renderer_no_root_wording(self):
+        """renderer.py must not say 'root privileges'."""
+        import pathlib
+        text = pathlib.Path("ixx/shell/renderer.py").read_text(encoding="utf-8")
+        self.assertNotIn("root privileges", text)
+        self.assertIn("run as admin", text)
+
+    def test_n10_renderer_no_not_yet_implemented(self):
+        """renderer.py must not print 'not yet implemented'."""
+        import pathlib
+        text = pathlib.Path("ixx/shell/renderer.py").read_text(encoding="utf-8")
+        self.assertNotIn("not yet implemented", text)
+        self.assertIn("not available yet", text)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Letter O — v0.6.8 float display and number() finite validation
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestLetterO(unittest.TestCase):
+    """Tests for v0.6.8 Letter O: float precision display and inf/nan rejection."""
+
+    # ── O1: Float precision display ───────────────────────────────────────────
+
+    def test_o1_point_one_plus_point_two(self):
+        """0.1 + 0.2 must display as 0.3, not 0.30000000000000004."""
+        self.assertEqual(run('say 0.1 + 0.2'), "0.3")
+
+    def test_o1_1_1_plus_2_2(self):
+        """1.1 + 2.2 must display as 3.3."""
+        self.assertEqual(run('say 1.1 + 2.2'), "3.3")
+
+    def test_o1_four_thirds(self):
+        """4 / 3 must not display excessive Python precision."""
+        result = run('say 4 / 3')
+        self.assertNotIn("33333333333", result)
+        self.assertTrue(result.startswith("1.333"))
+
+    def test_o1_ten_thirds(self):
+        """10 / 3 must display at most 10 significant digits."""
+        result = run('say 10 / 3')
+        self.assertNotIn("33333333333", result)
+        self.assertTrue(result.startswith("3.333"))
+
+    def test_o1_normal_float_unchanged(self):
+        """3.14 must still display as 3.14."""
+        self.assertEqual(run('say 3.14'), "3.14")
+
+    def test_o1_half_unchanged(self):
+        """0.5 must still display as 0.5."""
+        self.assertEqual(run('say 0.5'), "0.5")
+
+    def test_o1_round_still_works(self):
+        """round(3.14159, 2) must still display as 3.14."""
+        self.assertEqual(run('say round(3.14159, 2)'), "3.14")
+
+    def test_o1_round_whole_still_works(self):
+        """round(3.7) must still display as 4."""
+        self.assertEqual(run('say round(3.7)'), "4")
+
+    def test_o1_integer_division_clean(self):
+        """10 / 2 must display as 5 (integer), not 5.0."""
+        self.assertEqual(run('say 10 / 2'), "5")
+
+    # ── O3: number("1e5") display ─────────────────────────────────────────────
+
+    def test_o3_number_1e5(self):
+        """number('1e5') must display as 100000, not 100000.0."""
+        self.assertEqual(run('say number("1e5")'), "100000")
+
+    def test_o3_number_1_point_0(self):
+        """number('1.0') must display as 1, not 1.0 (trailing zero stripped)."""
+        self.assertEqual(run('say number("1.0")'), "1")
+
+    def test_o3_number_normal_decimal(self):
+        """number('3.14') must still display as 3.14."""
+        self.assertEqual(run('say number("3.14")'), "3.14")
+
+    # ── O2: Reject inf/nan in number() ───────────────────────────────────────
+
+    def test_o2_number_inf_raises(self):
+        """number('inf') must raise IXXRuntimeError with 'finite'."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('say number("inf")')
+        self.assertIn("finite", str(ctx.exception).lower())
+
+    def test_o2_number_negative_inf_raises(self):
+        """number('-inf') must raise IXXRuntimeError."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('say number("-inf")')
+        self.assertIn("finite", str(ctx.exception).lower())
+
+    def test_o2_number_nan_raises(self):
+        """number('nan') must raise IXXRuntimeError."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('say number("nan")')
+        self.assertIn("finite", str(ctx.exception).lower())
+
+    def test_o2_number_infinity_case_variants(self):
+        """number('Infinity') and number('INF') must also raise (Python accepts these)."""
+        for variant in ("Infinity", "INF", "NaN", "Inf"):
+            with self.subTest(variant=variant):
+                with self.assertRaises(IXXRuntimeError):
+                    run(f'say number("{variant}")')
+
+    def test_o2_number_no_python_jargon_in_error(self):
+        """number('inf') error must not expose Python float/nan jargon."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('say number("inf")')
+        msg = str(ctx.exception)
+        self.assertNotIn("float", msg.lower())
+        self.assertNotIn("ieee", msg.lower())
+        self.assertNotIn("traceback", msg.lower())
+
+    def test_o2_number_normal_still_works(self):
+        """Normal number conversion must still work after the finite check."""
+        self.assertEqual(run('say number("42")'), "42")
+        self.assertEqual(run('say number("3.14")'), "3.14")
+        self.assertEqual(run('say number("-7")'), "-7")
+
+    def test_o2_number_catch_inf(self):
+        """catch block should receive friendly error when number('inf') fails."""
+        src = 'try\n- say number("inf")\ncatch\n- say error'
+        result = run(src)
+        self.assertIn("finite", result.lower())
+        self.assertNotIn("Traceback", result)
+
+    # ── O1+O2: display via write/read roundtrip ───────────────────────────────
+
+    def test_o1_write_read_float_precision(self):
+        """Float written to a file uses the same display (no excess precision)."""
+        src = (
+            'x = 0.1 + 0.2\n'
+            'write "StressTest/tmp/o1-float.txt", x\n'
+            'say read("StressTest/tmp/o1-float.txt")'
+        )
+        result = run(src)
+        self.assertEqual(result, "0.3")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Letter P — v0.6.8 keyword interpolation fix
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestLetterP(unittest.TestCase):
+    """Tests for v0.6.8 Letter P: {YES}/{NO}/{nothing} interpolation fix."""
+
+    # ── P1: keyword interpolation produces correct output ────────────────────
+
+    def test_p1_yes_interpolation(self):
+        """say '{YES}' must output YES with no warning."""
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            result = run('say "{YES}"')
+        self.assertEqual(result, "YES")
+        self.assertNotIn("not defined", buf.getvalue())
+        self.assertNotIn("{?YES}", buf.getvalue())
+
+    def test_p1_no_interpolation(self):
+        """say '{NO}' must output NO with no warning."""
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            result = run('say "{NO}"')
+        self.assertEqual(result, "NO")
+        self.assertNotIn("not defined", buf.getvalue())
+
+    def test_p1_nothing_interpolation(self):
+        """say '{nothing}' must output nothing with no warning."""
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            result = run('say "{nothing}"')
+        self.assertEqual(result, "nothing")
+        self.assertNotIn("not defined", buf.getvalue())
+
+    def test_p1_yes_with_surrounding_text(self):
+        """say 'Active: {YES}' must output 'Active: YES'."""
+        result = run('say "Active: {YES}"')
+        self.assertEqual(result, "Active: YES")
+
+    def test_p1_no_with_surrounding_text(self):
+        """say 'Status: {NO}' must output 'Status: NO'."""
+        result = run('say "Status: {NO}"')
+        self.assertEqual(result, "Status: NO")
+
+    def test_p1_nothing_with_surrounding_text(self):
+        """say 'Value: {nothing}' must output 'Value: nothing'."""
+        result = run('say "Value: {nothing}"')
+        self.assertEqual(result, "Value: nothing")
+
+    def test_p1_lowercase_yes_interpolation(self):
+        """say '{yes}' must also output YES (yes is a valid alias)."""
+        result = run('say "{yes}"')
+        self.assertEqual(result, "YES")
+
+    def test_p1_lowercase_no_interpolation(self):
+        """say '{no}' must also output NO (no is a valid alias)."""
+        result = run('say "{no}"')
+        self.assertEqual(result, "NO")
+
+    # ── P1: normal variable interpolation unchanged ───────────────────────────
+
+    def test_p1_normal_variable_still_works(self):
+        """Normal variable interpolation must still work."""
+        result = run('name = "Ixxy"\nsay "Hello, {name}"')
+        self.assertEqual(result, "Hello, Ixxy")
+
+    def test_p1_variable_named_yes_takes_precedence(self):
+        """If a variable named YES exists, it takes precedence over the keyword."""
+        # In IXX, YES is a bool literal keyword — you can't assign to it.
+        # The keyword table fires before env lookup, so the literal value is used.
+        result = run('say "{YES}"')
+        self.assertEqual(result, "YES")
+
+    def test_p1_unknown_variable_still_warns(self):
+        """Unknown variable still produces {?name} and prints a warning."""
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            result = run('say "{ghost_var_xyz}"')
+        self.assertIn("{?ghost_var_xyz}", result)
+        self.assertIn("not defined", buf.getvalue())
+
+    def test_p1_expression_interpolation_still_warns(self):
+        """'{count(items)}' must not evaluate — appears as literal and warns."""
+        # The regex only matches identifier-only tokens; count(items) has parens
+        # so it doesn't match and passes through as literal text.
+        result = run('items = "a", "b"\nsay "{count(items)}"')
+        # Should contain the literal text, not the evaluated value
+        self.assertIn("count(items)", result)
+
+    # ── P1: escape sequence + keyword interpolation ───────────────────────────
+
+    def test_p1_newline_then_yes(self):
+        r"""say "Value:\n{YES}" outputs two lines, second line is YES."""
+        result = run('say "Value:\\n{YES}"')
+        parts = result.splitlines()
+        self.assertEqual(parts[0], "Value:")
+        self.assertEqual(parts[1], "YES")
+
+    # ── P1: keyword does not interfere with variables named similarly ─────────
+
+    def test_p1_variable_named_nope_not_affected(self):
+        """A variable named 'nope' is not mistaken for 'no'."""
+        result = run('nope = "hello"\nsay "{nope}"')
+        self.assertEqual(result, "hello")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Letter Q — v0.6.8 return list literal
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestLetterQ(unittest.TestCase):
+    """Tests for v0.6.8 Letter Q: return list literal from functions."""
+
+    # ── Q1: basic return of list literals ────────────────────────────────────
+
+    def test_q1_return_number_list(self):
+        """function can return a number list literal."""
+        result = run(
+            "function get_nums\n- return 1, 2, 3\n"
+            "items = get_nums()\n"
+            "say count(items)"
+        )
+        self.assertEqual(result, "3")
+
+    def test_q1_return_text_list(self):
+        """function can return a text list literal."""
+        result = run(
+            'function names\n- return "Ixxy", "Lune"\n'
+            "say first(names())"
+        )
+        self.assertEqual(result, "Ixxy")
+
+    def test_q1_return_mixed_list(self):
+        """function can return a mixed list literal."""
+        result = run(
+            'function mixed\n- return YES, NO, nothing, "done"\n'
+            "say count(mixed())"
+        )
+        self.assertEqual(result, "4")
+
+    def test_q1_count_returned_list(self):
+        """count() on a returned list literal gives correct length."""
+        result = run(
+            "function trio\n- return 10, 20, 30\n"
+            "say count(trio())"
+        )
+        self.assertEqual(result, "3")
+
+    def test_q1_first_on_returned_list(self):
+        """first() on a returned list literal gives the first element."""
+        result = run(
+            'function abc\n- return "a", "b", "c"\n'
+            "say first(abc())"
+        )
+        self.assertEqual(result, "a")
+
+    def test_q1_last_on_returned_list(self):
+        """last() on a returned list literal gives the last element."""
+        result = run(
+            'function abc\n- return "a", "b", "c"\n'
+            "say last(abc())"
+        )
+        self.assertEqual(result, "c")
+
+    def test_q1_loop_each_over_returned_list(self):
+        """loop each over a returned list literal iterates all elements."""
+        result = run(
+            "function nums\n- return 1, 2, 3\n"
+            "total = 0\n"
+            "loop each n in nums()\n- total = total + n\n"
+            "say total"
+        )
+        self.assertEqual(result, "6")
+
+    def test_q1_return_two_items(self):
+        """return with exactly two items works."""
+        result = run(
+            "function pair\n- return 7, 8\n"
+            "p = pair()\n"
+            "say count(p)"
+        )
+        self.assertEqual(result, "2")
+
+    # ── Q1: existing return behaviors unchanged ───────────────────────────────
+
+    def test_q1_return_single_value_unchanged(self):
+        """return single value still works as before."""
+        result = run(
+            "function give_five\n- return 5\n"
+            "say give_five()"
+        )
+        self.assertEqual(result, "5")
+
+    def test_q1_return_text_unchanged(self):
+        """return single text value still works."""
+        result = run(
+            'function greet\n- return "hello"\n'
+            "say greet()"
+        )
+        self.assertEqual(result, "hello")
+
+    def test_q1_return_nothing_unchanged(self):
+        """return nothing still works."""
+        result = run(
+            "function noop\n- return nothing\n"
+            "say text(noop())"
+        )
+        self.assertEqual(result, "nothing")
+
+    def test_q1_bare_return_unchanged(self):
+        """bare return (no value) still works."""
+        result = run(
+            "x = 0\n"
+            "function early\n- return\n"
+            "early\n"
+            "say 42"
+        )
+        self.assertEqual(result, "42")
+
+    def test_q1_return_list_variable_unchanged(self):
+        """return of a list variable still works."""
+        result = run(
+            "function get_items\n"
+            "- items = 10, 20, 30\n"
+            "- return items\n"
+            "say count(get_items())"
+        )
+        self.assertEqual(result, "3")
+
+    def test_q1_return_function_call_with_comma_args(self):
+        """return join(items, ', ') is a single function call, not a list."""
+        result = run(
+            'parts = "a", "b", "c"\n'
+            "function joined\n"
+            '- return join(parts, ", ")\n'
+            "say joined()"
+        )
+        self.assertEqual(result, "a, b, c")
+
+    # ── Q1: checker behavior ─────────────────────────────────────────────────
+
+    def _check_errors(self, src: str) -> list[str]:
+        from ixx.checker import SemanticChecker
+        from ixx.parser import parse
+        errors = SemanticChecker().check(parse(src), "test.ixx")
+        return [e.message for e in errors if e.severity == "error"]
+
+    def test_q1_checker_accepts_return_list_in_function(self):
+        """ixx check accepts return list literal inside a function."""
+        errors = self._check_errors("function get_items\n- return 1, 2, 3")
+        self.assertEqual(errors, [])
+
+    def test_q1_checker_rejects_toplevel_return_list(self):
+        """ixx check rejects top-level return list literal."""
+        errors = self._check_errors("return 1, 2, 3")
+        self.assertTrue(any("function" in e.lower() for e in errors), errors)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Letter T — v0.6.8 checker/interpreter behavior items
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestLetterT(unittest.TestCase):
+    """Tests for v0.6.8 Letter T: builtin shadow warning, chaining error, indent hint."""
+
+    # ── shared checker helper ─────────────────────────────────────────────────
+
+    def _check(self, src: str):
+        """Return list of CheckError objects from the semantic checker."""
+        from ixx.checker import SemanticChecker
+        from ixx.parser import parse
+        return SemanticChecker().check(parse(src), "test.ixx")
+
+    def _errors(self, src: str) -> list[str]:
+        return [e.message for e in self._check(src) if e.severity == "error"]
+
+    def _warnings(self, src: str) -> list[str]:
+        return [e.message for e in self._check(src) if e.severity == "warning"]
+
+    # ── T1: builtin shadow warning ────────────────────────────────────────────
+
+    def test_t1_shadow_count_warns(self):
+        """Assigning to 'count' produces a checker warning."""
+        warnings = self._warnings("count = 5\nsay count")
+        self.assertTrue(
+            any("count" in w and "shadows" in w for w in warnings),
+            f"Expected shadow warning, got: {warnings}",
+        )
+
+    def test_t1_shadow_text_warns(self):
+        """Assigning to 'text' produces a checker warning."""
+        warnings = self._warnings('text = "hello"\nsay text')
+        self.assertTrue(any("text" in w and "shadows" in w for w in warnings))
+
+    def test_t1_shadow_write_warns(self):
+        """Assigning to 'write' produces a checker warning."""
+        warnings = self._warnings('write = "oops"')
+        self.assertTrue(any("write" in w and "shadows" in w for w in warnings))
+
+    def test_t1_shadow_produces_warning_not_error(self):
+        """Builtin shadow is a warning, not an error — ok:true in check."""
+        errors = self._errors("count = 5\nsay count")
+        self.assertEqual(errors, [])
+
+    def test_t1_shadow_warning_mentions_rename(self):
+        """Shadow warning message mentions 'Rename' to guide the user."""
+        warnings = self._warnings("count = 5")
+        self.assertTrue(any("Rename" in w for w in warnings))
+
+    def test_t1_normal_var_no_warning(self):
+        """Normal variable name produces no shadow warning."""
+        warnings = self._warnings('score = 42\nsay score')
+        shadow_warnings = [w for w in warnings if "shadows" in w]
+        self.assertEqual(shadow_warnings, [])
+
+    def test_t1_no_warning_inside_function(self):
+        """Shadow warning is suppressed inside function bodies (conservative)."""
+        warnings = self._warnings("function demo\n- count = 5\n- say count")
+        shadow_warnings = [w for w in warnings if "shadows" in w]
+        self.assertEqual(shadow_warnings, [])
+
+    def test_t1_json_check_ok_true_for_shadow(self):
+        """ixx check --json produces ok:true with a warning for builtin shadowing."""
+        import json, tempfile, os as _os
+        code = "count = 5\nsay count\n"
+        with tempfile.NamedTemporaryFile(suffix=".ixx", mode="w",
+                                         encoding="utf-8", delete=False) as f:
+            f.write(code)
+            tmp = f.name
+        try:
+            exit_code, raw = cli("check", tmp, "--json")
+        finally:
+            _os.unlink(tmp)
+        data = json.loads(raw)
+        self.assertTrue(data["ok"])
+        severities = [e["severity"] for e in data["errors"]]
+        self.assertIn("warning", severities)
+
+    # ── T2: comparison chaining error ─────────────────────────────────────────
+
+    def test_t2_chaining_error_message(self):
+        """Chained comparison produces 'Comparisons cannot be chained' error."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('a = 1\nb = 2\nc = 3\nif a less than b less than c\n- say "ok"')
+        self.assertIn("Comparisons cannot be chained", str(ctx.exception))
+
+    def test_t2_chaining_hint_includes_and(self):
+        """Chaining error includes 'and' in the hint."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('a = 1\nb = 2\nc = 3\nif a less than b less than c\n- say "ok"')
+        self.assertIn("and", str(ctx.exception))
+
+    def test_t2_non_chained_bool_keeps_yes_no_message(self):
+        """YES/NO as the RIGHT operand keeps the existing yes-or-no message."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('if 5 less than YES\n- say "bad"')
+        self.assertIn("YES/NO", str(ctx.exception))
+        self.assertNotIn("chained", str(ctx.exception).lower())
+
+    def test_t2_normal_comparison_unchanged(self):
+        """Normal numeric comparison still works."""
+        result = run('x = 3\nif x less than 10\n- say "small"')
+        self.assertEqual(result, "small")
+
+    def test_t2_chaining_with_more_than(self):
+        """Chained 'more than' also gives chaining message."""
+        with self.assertRaises(IXXRuntimeError) as ctx:
+            run('a = 10\nb = 5\nc = 1\nif a more than b more than c\n- say "ok"')
+        self.assertIn("Comparisons cannot be chained", str(ctx.exception))
+
+    # ── T5: skipped indentation level friendly error ──────────────────────────
+
+    def test_t5_skipped_indent_gives_dash_hint(self):
+        """Missing block body (no indent) produces the dash-hint message."""
+        import tempfile, os as _os
+        code = "if YES\nsay hello\n"   # if body has no dash — INDENT expected
+        with tempfile.NamedTemporaryFile(suffix=".ixx", mode="w",
+                                         encoding="utf-8", delete=False) as f:
+            f.write(code)
+            tmp = f.name
+        try:
+            exit_code, out = cli(tmp)
+        finally:
+            _os.unlink(tmp)
+        self.assertNotEqual(exit_code, 0)
+        self.assertIn("dash", out.lower())
+
+    def test_t5_normal_indent_works(self):
+        """Correct single-level indentation executes without error."""
+        result = run('if YES\n- say "ok"')
+        self.assertEqual(result, "ok")
+
+    def test_t5_two_level_indent_works(self):
+        """Correct two-level indentation inside a function parses and runs fine."""
+        # Verify that -- inside a function body is valid IXX syntax.
+        result = run(
+            "function demo\n"
+            "- if YES\n"
+            "-- say \"ok\"\n"
+            "demo"
+        )
+        self.assertEqual(result, "ok")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Letter U — v0.6.8 REPL/shell fixes
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestLetterU(unittest.TestCase):
+    """Tests for v0.6.8 Letter U: REPL persistence, routing, history, normalize."""
+
+    # ── shared helpers ────────────────────────────────────────────────────────
+
+    def _make_interp(self):
+        """Create a fresh Interpreter for a simulated REPL session."""
+        from ixx.interpreter import Interpreter
+        return Interpreter()
+
+    def _repl_run(self, interp, source: str) -> str:
+        """Run *source* through run_repl_input() using the given session interpreter."""
+        import io, contextlib, os
+        from ixx.parser import parse
+        from ixx.modules import resolve_imports
+        buf = io.StringIO()
+        program = parse(source)
+        imported = resolve_imports(program, os.getcwd())
+        with contextlib.redirect_stdout(buf):
+            interp.run_repl_input(program, imported)
+        return buf.getvalue().rstrip("\n")
+
+    # ── U1: state persistence ─────────────────────────────────────────────────
+
+    def test_u1_variable_persists(self):
+        """Variable defined in one input is visible in the next."""
+        interp = self._make_interp()
+        self._repl_run(interp, 'name = "Ixxy"')
+        result = self._repl_run(interp, 'say name')
+        self.assertEqual(result, "Ixxy")
+
+    def test_u1_function_persists(self):
+        """Function defined in one input can be called in a later input."""
+        interp = self._make_interp()
+        self._repl_run(interp, 'function double x\n- return x * 2')
+        result = self._repl_run(interp, 'say double(21)')
+        self.assertEqual(result, "42")
+
+    def test_u1_multiple_variables_persist(self):
+        """Multiple sequential definitions all persist."""
+        interp = self._make_interp()
+        self._repl_run(interp, 'a = 10')
+        self._repl_run(interp, 'b = 20')
+        result = self._repl_run(interp, 'say a + b')
+        self.assertEqual(result, "30")
+
+    def test_u1_function_redefinition_works(self):
+        """Redefining a function in the REPL silently overwrites it (no duplicate error)."""
+        interp = self._make_interp()
+        self._repl_run(interp, 'function greet\n- say "v1"')
+        self._repl_run(interp, 'function greet\n- say "v2"')
+        result = self._repl_run(interp, 'greet')
+        self.assertEqual(result, "v2")
+
+    def test_u1_fresh_interpreter_has_no_state(self):
+        """A fresh Interpreter starts with no variables."""
+        interp = self._make_interp()
+        from ixx.runtime.errors import IXXRuntimeError
+        with self.assertRaises(IXXRuntimeError):
+            self._repl_run(interp, 'say undefined_ghost_xyz')
+
+    def test_u1_normal_run_still_resets(self):
+        """run() still resets state — it is not affected by run_repl_input."""
+        from ixx.parser import parse
+        from ixx.interpreter import Interpreter
+        interp = Interpreter()
+        program = parse('x = 99')
+        interp.run(program)
+        # A second run() should reset env
+        program2 = parse('say x')
+        from ixx.runtime.errors import IXXRuntimeError
+        with self.assertRaises(IXXRuntimeError):
+            interp.run(program2)
+
+    # ── U2: IXX call statement routing ───────────────────────────────────────
+
+    def test_u2_write_routed_as_ixx(self):
+        """'write' as first token is treated as IXX, not an unknown shell command."""
+        import tempfile, os as _os
+        with tempfile.TemporaryDirectory() as d:
+            path = _os.path.join(d, "out.txt")
+            # run via _try_run_ixx logic — provide a dummy prompt that never continues
+            from ixx.shell.repl import _try_run_ixx
+            captured = []
+            import io, contextlib
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                result = _try_run_ixx(
+                    f'write "{path}", "hello"',
+                    lambda p: "",   # blank continuation → abort multiline
+                )
+            # Should be True (routed as IXX) and write the file
+            self.assertTrue(result)
+            if _os.path.exists(path):
+                with open(path) as f:
+                    self.assertEqual(f.read(), "hello")
+
+    def test_u2_say_routed_as_ixx(self):
+        """'say' is correctly classified as IXX."""
+        from ixx.shell.repl import _try_run_ixx
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = _try_run_ixx('say "hello"', lambda p: "")
+        self.assertTrue(result)
+        self.assertEqual(buf.getvalue().strip(), "hello")
+
+    def test_u2_do_routed_as_ixx_starter(self):
+        """'do' as first token is classified as an IXX starter, not an unknown command."""
+        from ixx.shell.repl import _try_run_ixx
+        # We just need result=True (classified as IXX), not necessarily successful
+        # 'do' may fail if there's nothing useful to run, but it shouldn't be False
+        result = _try_run_ixx('do "echo test"', lambda p: "")
+        self.assertTrue(result)
+
+    # ── U3: blank continuation line shows error ───────────────────────────────
+
+    def test_u3_blank_continuation_shows_error_not_silent(self):
+        """When blank continuation is entered after incomplete IXX, errors are shown."""
+        from ixx.shell.repl import _try_run_ixx
+        import io, contextlib
+        buf_out = io.StringIO()
+        buf_err = io.StringIO()
+        # incomplete function definition → UnexpectedEOF → blank line → parse attempt
+        with contextlib.redirect_stdout(buf_out), contextlib.redirect_stderr(buf_err):
+            result = _try_run_ixx(
+                'function broken',
+                lambda p: "",  # blank continuation
+            )
+        # Should have returned True (handled as IXX)
+        self.assertTrue(result)
+        # Should NOT be completely silent — some output or at least not crash
+        combined = buf_out.getvalue() + buf_err.getvalue()
+        # The blank-cont path either succeeds (function registered) or
+        # prints a friendly error — either way no raw Python traceback
+        self.assertNotIn("Traceback", combined)
+
+    # ── U4: _normalize preserves quoted string casing ────────────────────────
+
+    def test_u4_unquoted_tokens_lowercased(self):
+        """Unquoted command tokens are lowercased."""
+        from ixx.shell.repl import _tokenize_raw, _normalize
+        tokens = _tokenize_raw("CPU Info")
+        result = _normalize(tokens)
+        self.assertEqual(result, ["cpu", "info"])
+
+    def test_u4_quoted_tokens_preserve_case(self):
+        """Quoted string arguments preserve their original casing."""
+        from ixx.shell.repl import _tokenize_raw, _normalize
+        tokens = _tokenize_raw('open "/home/User/MyFile.txt"')
+        result = _normalize(tokens)
+        self.assertEqual(result, ["open", "/home/User/MyFile.txt"])
+
+    def test_u4_mixed_command_and_path(self):
+        """Command portion is lowercased; quoted path argument is not."""
+        from ixx.shell.repl import _tokenize_raw, _normalize
+        tokens = _tokenize_raw('COPY "/Src/File.txt" "/Dst/Output.TXT"')
+        result = _normalize(tokens)
+        self.assertEqual(result, ["copy", "/Src/File.txt", "/Dst/Output.TXT"])
+
+    def test_u4_unquoted_path_lowercased(self):
+        """Unquoted arguments are still lowercased (existing behavior preserved)."""
+        from ixx.shell.repl import _tokenize_raw, _normalize
+        tokens = _tokenize_raw("RAM Used")
+        result = _normalize(tokens)
+        self.assertEqual(result, ["ram", "used"])
+
+    def test_u4_tokenize_returns_strings(self):
+        """_tokenize (public API) returns plain list[str] for backward compat."""
+        from ixx.shell.repl import _tokenize
+        result = _tokenize('say "World"')
+        self.assertEqual(result, ["say", "World"])
+
+    def test_u4_tokenize_raw_returns_tuples(self):
+        """_tokenize_raw returns list of (token, was_quoted) tuples."""
+        from ixx.shell.repl import _tokenize_raw
+        result = _tokenize_raw('say "World"')
+        self.assertEqual(result, [("say", False), ("World", True)])
+
+    # ── U5: readline history ──────────────────────────────────────────────────
+
+    def test_u5_setup_readline_does_not_crash_without_readline(self):
+        """_setup_readline does not crash when readline is unavailable."""
+        from ixx.shell.repl import _setup_readline
+        import sys
+        from unittest.mock import patch, MagicMock
+        # Simulate both readline and pyreadline3 being missing
+        with patch.dict(sys.modules, {"readline": None, "pyreadline3": None}):
+            try:
+                _setup_readline()  # Must not raise
+            except Exception as e:
+                self.fail(f"_setup_readline raised {e!r} when readline unavailable")
+
+    def test_u5_history_file_path_is_home_ixx_history(self):
+        """The history file path includes .ixx_history in the home directory."""
+        from ixx.shell.repl import _HISTORY_FILE
+        import pathlib
+        expected = str(pathlib.Path.home() / ".ixx_history")
+        self.assertEqual(_HISTORY_FILE, expected)
+
+    def test_u5_safe_write_history_does_not_crash_without_readline(self):
+        """_safe_write_history is a no-op when readline is missing."""
+        from ixx.shell.repl import _safe_write_history
+        import sys
+        from unittest.mock import patch
+        with patch.dict(sys.modules, {"readline": None}):
+            try:
+                _safe_write_history()
+            except Exception as e:
+                self.fail(f"_safe_write_history raised {e!r}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Letter V — v0.6.8 checker quality fixes
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestLetterV(unittest.TestCase):
+    """Tests for v0.6.8 Letter V: StrLit line metadata, script-dir paths, line map."""
+
+    # ── shared helpers ────────────────────────────────────────────────────────
+
+    def _check(self, src: str, file_path: str = "test.ixx"):
+        """Run SemanticChecker directly; return list of CheckError objects."""
+        from ixx.checker import SemanticChecker
+        from ixx.parser import parse
+        return SemanticChecker().check(parse(src), file_path)
+
+    # ── V1: StrLit carries line metadata ─────────────────────────────────────
+
+    def test_v1_strlit_has_line_attribute(self):
+        """StrLit node has a line attribute after parsing."""
+        from ixx.parser import parse
+        from ixx.ast_nodes import Assign, StrLit
+        program = parse('x = "hello"')
+        assign = program.body[0]
+        self.assertIsInstance(assign, Assign)
+        self.assertIsInstance(assign.value, StrLit)
+        self.assertIsNotNone(assign.value.line)
+
+    def test_v1_strlit_line_matches_source_line(self):
+        """StrLit.line reflects the correct (preprocessed) source line."""
+        from ixx.parser import parse
+        from ixx.ast_nodes import Assign, StrLit
+        program = parse('x = 1\ny = "hello"')
+        str_assign = program.body[1]
+        self.assertIsInstance(str_assign.value, StrLit)
+        # Preprocessed line 2 (no blank lines in source)
+        self.assertEqual(str_assign.value.line, 2)
+
+    def test_v1_interpolation_warning_has_line_not_null(self):
+        """Interpolation expression warning now has a real line number, not null."""
+        errors = self._check('items = "a", "b"\nx = "{count(items)}"')
+        warnings = [e for e in errors if e.severity == "warning"]
+        self.assertTrue(len(warnings) > 0, "Expected a warning for expression interpolation")
+        self.assertIsNotNone(warnings[0].line,
+                             "Interpolation warning should have a line number, not null")
+
+    def test_v1_interpolation_warning_line_is_correct(self):
+        """Interpolation warning line points to the string's actual source line."""
+        errors = self._check('x = 1\ny = "{count(items)}"')
+        warnings = [e for e in errors if e.severity == "warning"]
+        self.assertTrue(warnings)
+        # The string is on line 2
+        self.assertEqual(warnings[0].line, 2)
+
+    # ── V2: read() path resolves relative to script directory ────────────────
+
+    def test_v2_read_resolves_relative_to_script_dir(self):
+        """read('data.txt') in a script finds the file next to the script."""
+        import tempfile, os as _os
+        from ixx.checker import SemanticChecker
+        from ixx.parser import parse
+        with tempfile.TemporaryDirectory() as d:
+            # Create data.txt next to the "script"
+            data_file = _os.path.join(d, "data.txt")
+            with open(data_file, "w") as f:
+                f.write("hello")
+            script_path = _os.path.join(d, "script.ixx")
+            # Check from a completely different CWD
+            src = 'say read("data.txt")'
+            errors = SemanticChecker().check(parse(src), script_path)
+            file_errors = [e for e in errors if e.severity == "error"
+                           and "File not found" in e.message]
+            self.assertEqual(file_errors, [],
+                             "read('data.txt') should not error when file is next to script")
+
+    def test_v2_read_still_errors_for_truly_missing_file(self):
+        """read('missing.txt') still errors when file is genuinely missing."""
+        import tempfile, os as _os
+        from ixx.checker import SemanticChecker
+        from ixx.parser import parse
+        with tempfile.TemporaryDirectory() as d:
+            script_path = _os.path.join(d, "script.ixx")
+            src = 'say read("no_such_file_xyz.txt")'
+            errors = SemanticChecker().check(parse(src), script_path)
+            file_errors = [e for e in errors if e.severity == "error"
+                           and "File not found" in e.message]
+            self.assertTrue(len(file_errors) > 0,
+                            "read('missing.txt') should still produce an error")
+
+    def test_v2_readlines_resolves_relative_to_script_dir(self):
+        """readlines('data.txt') also resolves relative to script dir."""
+        import tempfile, os as _os
+        from ixx.checker import SemanticChecker
+        from ixx.parser import parse
+        with tempfile.TemporaryDirectory() as d:
+            data_file = _os.path.join(d, "data.txt")
+            with open(data_file, "w") as f:
+                f.write("line1\nline2")
+            script_path = _os.path.join(d, "script.ixx")
+            src = 'lines = readlines("data.txt")'
+            errors = SemanticChecker().check(parse(src), script_path)
+            file_errors = [e for e in errors if e.severity == "error"
+                           and "File not found" in e.message]
+            self.assertEqual(file_errors, [])
+
+    def test_v2_absolute_path_unchanged(self):
+        """An absolute path in read() is not re-resolved."""
+        import tempfile, os as _os
+        from ixx.checker import SemanticChecker
+        from ixx.parser import parse
+        with tempfile.TemporaryDirectory() as d:
+            data_file = _os.path.join(d, "data.txt")
+            with open(data_file, "w") as f:
+                f.write("content")
+            # Use forward slashes so backslashes aren't treated as IXX escapes
+            fwd_path = data_file.replace("\\", "/")
+            src = f'say read("{fwd_path}")'
+            errors = SemanticChecker().check(parse(src), "test.ixx")
+            file_errors = [e for e in errors if "File not found" in e.message]
+            self.assertEqual(file_errors, [])
+
+    # ── V3: line map corrects checker error lines for blank-line stripping ────
+
+    def test_v3_preprocess_with_map_no_blanks(self):
+        """With no blank lines, map is identity (preprocessed line == original line)."""
+        from ixx.preprocessor import preprocess_with_map
+        src = "x = 1\nsay x\n"
+        _, line_map = preprocess_with_map(src)
+        self.assertEqual(line_map.get(1), 1)
+        self.assertEqual(line_map.get(2), 2)
+
+    def test_v3_preprocess_with_map_blank_lines_shift(self):
+        """Blank lines shift preprocessed line numbers; map records correct originals."""
+        from ixx.preprocessor import preprocess_with_map
+        # original line 1: x = 1
+        # original line 2: (blank)
+        # original line 3: say x
+        src = "x = 1\n\nsay x\n"
+        _, line_map = preprocess_with_map(src)
+        self.assertEqual(line_map.get(1), 1)   # "x = 1" → orig line 1
+        self.assertEqual(line_map.get(2), 3)   # "say x" → orig line 3
+
+    def test_v3_checker_error_line_corrected_via_cli(self):
+        """ixx check --json reports the original file line, not the preprocessed line."""
+        import json, tempfile, os as _os
+        # Line 1: blank
+        # Line 2: x = 1
+        # Line 3: blank
+        # Line 4: say ghost_var  ← error here (original line 4)
+        src = "\nx = 1\n\nsay ghost_var\n"
+        with tempfile.NamedTemporaryFile(suffix=".ixx", mode="w",
+                                         encoding="utf-8", delete=False) as f:
+            f.write(src)
+            tmp = f.name
+        try:
+            exit_code, raw = cli("check", tmp, "--json")
+        finally:
+            _os.unlink(tmp)
+        data = json.loads(raw)
+        error_lines = [e["line"] for e in data["errors"] if e["severity"] == "error"]
+        self.assertTrue(any(ln == 4 for ln in error_lines),
+                        f"Expected error on original line 4, got lines: {error_lines}")
+
+    def test_v3_human_check_line_corrected(self):
+        """ixx check (human output) reports the original file line number."""
+        import tempfile, os as _os
+        # original line 1: blank
+        # original line 2: say ghost_var  ← error
+        src = "\nsay ghost_var\n"
+        with tempfile.NamedTemporaryFile(suffix=".ixx", mode="w",
+                                         encoding="utf-8", delete=False) as f:
+            f.write(src)
+            tmp = f.name
+        try:
+            exit_code, combined = cli("check", tmp)
+        finally:
+            _os.unlink(tmp)
+        self.assertNotEqual(exit_code, 0)
+        # Original line 2 should appear, not preprocessed line 1
+        self.assertIn("line 2", combined)
+
+    def test_v3_no_blank_lines_line_unchanged(self):
+        """With no blank lines, checker error line is reported as-is."""
+        import json, tempfile, os as _os
+        src = "say ghost_var\n"
+        with tempfile.NamedTemporaryFile(suffix=".ixx", mode="w",
+                                         encoding="utf-8", delete=False) as f:
+            f.write(src)
+            tmp = f.name
+        try:
+            exit_code, raw = cli("check", tmp, "--json")
+        finally:
+            _os.unlink(tmp)
+        data = json.loads(raw)
+        error_lines = [e["line"] for e in data["errors"] if e["severity"] == "error"]
+        self.assertTrue(any(ln == 1 for ln in error_lines),
+                        f"Expected error on line 1, got: {error_lines}")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

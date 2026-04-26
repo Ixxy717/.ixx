@@ -555,8 +555,8 @@ class TestBugfixes(unittest.TestCase):
         self.assertIn("YES/NO in arithmetic", err)
 
     def test_bool_int_guard_comparison(self):
-        """YES more than 0 should raise, not silently return True."""
-        err = run_err("if YES more than 0\n- say \"bad\"")
+        """YES/NO on the right side of a numeric comparison should raise."""
+        err = run_err("if 0 more than YES\n- say \"bad\"")
         self.assertIn("YES/NO", err)
 
     def test_silent_interpolation_warning(self):

@@ -429,16 +429,12 @@ ixx shell
 Both open the IXX interactive prompt:
 
 ```
-IXX Shell  0.3.0-dev
-Type a command to get started, or 'help' for a list.
-Type 'exit' to leave.
-
 ixx>
 ```
 
 ---
 
-### 4.2 What works in v0.3.0
+### 4.2 Available shell commands
 
 These commands run real system queries on Windows:
 
@@ -665,16 +661,14 @@ Some commands are in the guidance tree but do not execute real operations yet. T
 
 ```
 ixx> gpu
-  [gpu  -  not yet implemented, planned for a future release]
+  [gpu  -  not available yet, coming in a future release]
 
 ixx> kill process chrome
-  [kill process  -  not yet implemented, planned for a future release]
+  [kill process  -  not available yet, coming in a future release]
 
 ixx> ssh my-server
-  [ssh  -  not yet implemented, planned for remote access release]
+  [ssh  -  not available yet, coming in a future release]
 ```
-
-Registered stub commands: `gpu`, `ports`, `processes`, `kill process`, `copy`, `move`, `delete`, `find file`, `native`, `ssh`, `servers`, `server add`, `server list`, `wifi` (standalone), `cpu temperature`, `cpu speed`, `cpu info`, `ram free`, `ram usage`, `ram speed`, `disk health`, `disk partitions`, `ip public`.
 
 ---
 
@@ -898,6 +892,8 @@ IXX/
 │   ├── ast_nodes.py             AST dataclasses
 │   ├── build_ast.py             parse tree transformer
 │   ├── interpreter.py           execution engine
+│   ├── checker.py               semantic checker
+│   ├── modules.py               import/use resolver
 │   └── shell/
 │       ├── repl.py
 │       ├── registry.py
@@ -919,24 +915,31 @@ IXX/
 │           └── macos.py
 │
 ├── tests/
-│   ├── test_ixx.py              98 language tests
-│   ├── test_shell.py            54 shell architecture tests
-│   └── test_v030.py             66 v0.3.0 tests (paths, formats, handlers, ixx do)
+│   ├── test_ixx.py              main language test suite
+│   ├── test_shell.py            shell architecture tests
+│   └── test_normalization.py    shell alias normalization tests
 │
 ├── examples/
 │   ├── hello.ixx
 │   ├── condition.ixx
 │   ├── lists.ixx
 │   ├── advanced.ixx
-│   └── system-info.ixx
+│   ├── errors/                  intentional failure demos
+│   └── archive/                 historical syntax examples
 │
 ├── spec/
 │   ├── language.md              full language reference
-│   ├── shell.md                 shell design + SSH vision
+│   ├── dictionary.md            complete IXX dictionary
+│   ├── shell.md                 shell design
 │   └── roadmap.md               development phases
 │
 ├── docs/
 │   └── getting-started.md
+│
+├── StressTest/
+│   ├── run-all.cmd              normal suite runner
+│   ├── Hard/run-hard.cmd        hard suite runner
+│   └── Scenario/run-scenario.cmd  scenario suite runner
 │
 ├── CHANGELOG.md
 ├── README.md
@@ -961,36 +964,41 @@ The IXX language is working. Scripts run. All language features are implemented 
 - `YES` / `NO` booleans
 - Comments
 - Friendly syntax error messages with source line and caret
-- 98 tests passing
 
-### v0.2.0 — Shell skeleton (stable, on `v0.2.0-shell-planning`)
+### v0.2.0 — Shell skeleton
 
 The interactive shell architecture is working. The REPL loop is live. All commands are stubs but the guidance engine, help system, and fuzzy correction all work.
 
-- `ixx` and `ixx shell` open the REPL
-- Data-driven `CommandNode` + `CommandRegistry`
-- `get_guidance()` engine
-- Hint display, help system, fuzzy correction
-- 18 commands registered as stubs
-- 152 tests passing
+### v0.3.x — Real commands
 
-### v0.3.0-dev — Real commands (in progress, on `v0.3.0-system-commands`)
-
-First real-usefulness release. Shell commands actually do things.
+First real-usefulness release. Shell commands actually do things on Windows.
 
 - 14 live command entries with real Windows implementations
 - Platform adapter layer (`shell/platform/`)
 - Path alias system (`shell/paths.py`)
-- Format helpers: `format_bytes()`, `render_table()`
-- `executable_with_children` — parent commands run overview AND show subcommands
 - `ixx do "command"` single-dispatch mode
-- SSH/server command stubs in the guidance tree
-- UTF-8 console output on Windows
-- **218 tests passing** (98 language + 54 shell + 66 v0.3.0)
+
+### v0.4.0 — Functions
+
+User-defined functions, return values, recursion.
+
+### v0.5.0 — Built-in library
+
+Text, math, list, and color built-in functions.
+
+### v0.6.x — Extended language and audit
+
+- v0.6.0: File I/O, `try`/`catch`, `nothing`, `ask()`
+- v0.6.2: `ixx check`, semantic checker, `--json` output, VS Code diagnostics
+- v0.6.4: `do()` built-in
+- v0.6.5: Modules / `use` imports, standard library foundation
+- v0.6.6: `loop each item in list`
+- v0.6.7: Bug & edge-case audit
+- v0.6.8: Deep audit fixes — friendly errors, REPL persistence, float display, checker quality, and documentation overhaul
 
 ### Implementation note
 
-The current runtime is Python with the Lark parser library. Python is the **prototype vehicle** — it is not the identity of IXX. A future release will ship as a standalone binary compiled from Go, Rust, or a similar language. The Python version will remain as the reference implementation but is clearly labelled as prototype v0.
+The current runtime is Python with the Lark parser library. Python is the **prototype vehicle** — it is not the identity of IXX. A future release will ship as a standalone binary. The Python version remains the reference implementation but is clearly prototype v0.
 
 ---
 
@@ -1057,20 +1065,23 @@ ixx my-server>         connected remote shell
 
 ### Language evolution
 
-IXX the language will grow alongside the shell. Functions are the next major language feature (v0.4.0), enabling reusable logic, parameterised scripts, and eventually callable shell macros.
+IXX the language has grown alongside the shell. Functions, file I/O, try/catch, modules, loop-each, and a built-in library are all in place as of v0.6.8.
 
-After functions: modules, standard library integration, and the ability to author IXX scripts that feel like real programs rather than one-off notes.
+The next language additions are list building (`empty list` / `put into`), native command execution (`run()`), and deeper shell integration.
+
+After those: a richer standard library, and eventually a scripting experience that feels like a real local automation tool rather than a one-off note.
 
 ### Staged roadmap
 
 | Version | Theme                        | Key additions                                              |
 |---------|------------------------------|------------------------------------------------------------|
-| v0.1.0  | Language prototype           | IXX language, syntax, interpreter, 98 tests               |
+| v0.1.0  | Language prototype           | IXX language, syntax, interpreter                         |
 | v0.2.0  | Shell skeleton               | REPL, guidance, fuzzy correction, stub commands            |
 | v0.3.x  | First real commands          | ip, cpu, ram, disk, folder, open, list, aliases, ethernet  |
-| v0.4.0  | Functions + files            | IXX functions, copy/move, find file, processes, ports      |
-| v0.5.0  | Remote access                | SSH profiles, run on server, saved targets                 |
-| v0.6.0+ | Services, packages, scripting| systemctl/services, logs, docker helpers, repair tools     |
+| v0.4.0  | Functions + files            | IXX functions, file I/O, try/catch, nothing, ask()         |
+| v0.5.0  | Built-in library             | text, math, list, color built-ins                          |
+| v0.6.x  | Extended language            | modules, loop each, bug audit, deep audit fixes            |
+| v0.7    | Local scripting shell        | list building, run(), better shell, ixxterm                |
 
 ### The standalone binary
 

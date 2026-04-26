@@ -3,7 +3,7 @@ say color("dim", "Same file. Bigger stress.")
 say "--------------------------------"
 
 project = "IXX"
-version = "0.5.2"
+version = "0.6.8"
 owner = "Ixxy"
 
 function line
@@ -77,7 +77,7 @@ function scorelabel score
 -- return color("yellow", "usable")
 - return color("red", "rough")
 
-function calculatescore base bonus penalty
+function calculatescore base, bonus, penalty
 - boosted = add(base, bonus)
 - final = sub(boosted, penalty)
 - return final
@@ -98,7 +98,7 @@ function nothinggate
 -- return color("green", "good: nothing acted falsy")
 - return color("red", "bad fallback")
 
-function makereport ownername projectname
+function makereport ownername, projectname
 - cleanowner = trim(ownername)
 - cleanproject = trim(projectname)
 - ownertext = upper(cleanowner)
@@ -132,7 +132,7 @@ function runcountdown n
 -- n = n - 1
 - return "launch"
 
-function repeatedtext word times
+function repeatedtext word, times
 - output = ""
 - loop times more than 0
 -- output = output + word

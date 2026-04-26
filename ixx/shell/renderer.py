@@ -106,7 +106,7 @@ def show_hints(result: GuidanceResult) -> None:
         print(f"\n  {_c(_YELLOW, f'Warning: {text}')}")
 
     if result.requires_admin:
-        print(f"  {_c(_YELLOW, 'Note: may require administrator / root privileges.')}")
+        print(f"  {_c(_YELLOW, 'Note: may require administrator privileges (run as admin).')}")
 
     print()
 
@@ -165,8 +165,6 @@ def _show_broad_help(registry: CommandRegistry) -> None:
         "folder size downloads",
         "open desktop",
         'find file "invoice"',
-        "copy report.pdf to desktop",
-        "delete folder old-stuff recursive",
     ]
     for ex in _BROAD_EXAMPLES:
         print(f"    {ex}")
@@ -230,9 +228,9 @@ def show_unknown(word: str, suggestions: list[str]) -> None:
     print()
 
 
-def show_not_implemented(command_path: str, note: str = "planned for a future release") -> None:
+def show_not_implemented(command_path: str, note: str = "coming in a future release") -> None:
     """Print the standard stub message for commands not yet wired up."""
-    print(f"\n  [{_c(_DIM, f'{command_path}  -  not yet implemented, {note}')}]\n")
+    print(f"\n  [{_c(_DIM, f'{command_path}  -  not available yet, {note}')}]\n")
 
 
 def show_unknown_subcommand(parent: str, unknown: str, suggestions: list[str]) -> None:

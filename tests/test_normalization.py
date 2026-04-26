@@ -167,10 +167,17 @@ class TestAliasRouting(unittest.TestCase):
         self.assertIn("free", out.lower())
 
     def test_memory_used_same_as_ram_usage(self):
-        """'memory used' and 'ram usage' must produce identical output."""
+        """'memory used' and 'ram usage' must route to the same command.
+
+        Live RAM readings fluctuate between calls, so we verify structural
+        equivalence (both contain 'used' and a '%' sign) rather than
+        requiring byte-for-byte identical output.
+        """
         out_alias = _run("memory used")
         out_canon = _run("ram usage")
-        self.assertEqual(out_alias.strip(), out_canon.strip())
+        for out, label in ((out_alias, "memory used"), (out_canon, "ram usage")):
+            self.assertIn("used", out.lower(), f"'{label}' output missing 'used'")
+            self.assertIn("%", out, f"'{label}' output missing '%'")
 
     def test_processor_to_cpu_overview(self):
         out = _run("processor")

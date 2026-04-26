@@ -75,7 +75,8 @@ function Run-Positive {
     }
 
     Write-Host "[RUN] $File" -ForegroundColor Cyan
-    $runOut = & ixx $File 2>&1
+    # Pipe null stdin so ask() and similar never block the automated runner.
+    $runOut = $null | & ixx $File 2>&1
     $runCode = $LASTEXITCODE
     $runOut | ForEach-Object { Write-Host $_ }
     Count-Assertions $runOut
@@ -85,6 +86,82 @@ function Run-Positive {
     } else {
         Add-FilePass $File
     }
+}
+
+function Run-WithInput {
+    param(
+        [string]$Name,
+        [string]$File,
+        [string]$StdinText,
+        [string]$ExpectContains = ""
+    )
+    Write-Host ""
+    Write-Host "[RUN WITH INPUT] $Name" -ForegroundColor Cyan
+    $runOut = $StdinText | & ixx $File 2>&1
+    $runCode = $LASTEXITCODE
+    $runOut | ForEach-Object { Write-Host $_ }
+    Count-Assertions $runOut
+
+    if ($runCode -ne 0) {
+        Add-FileFail "$Name run"
+        return
+    }
+    if ($ExpectContains) {
+        $text = ($runOut | Out-String)
+        if ($text -notlike "*$ExpectContains*") {
+            Add-FileFail "$Name output missing '$ExpectContains'"
+            return
+        }
+    }
+    Add-FilePass $Name
+}
+
+function Run-JsonWarnCheck {
+    param(
+        [string]$Name,
+        [string]$File,
+        [string]$MessageContains = ""
+    )
+    Write-Host ""
+    Write-Host "[CHECK JSON WARN] $Name" -ForegroundColor Magenta
+    $out = & ixx check $File --json 2>&1
+    $code = $LASTEXITCODE
+    $text = ($out | Out-String).Trim()
+    Write-Host $text
+
+    try {
+        $json = $text | ConvertFrom-Json
+    } catch {
+        Add-JsonFail $Name "output was not valid JSON"
+        return
+    }
+
+    if ($null -eq $json.ok) { Add-JsonFail $Name "missing ok field"; return }
+    if ($json.ok -ne $true) { Add-JsonFail $Name "expected ok true for warning-only file"; return }
+    if ($code -ne 0) { Add-JsonFail $Name "expected exit 0 for warning"; return }
+    if ($null -eq $json.errors -or $json.errors.Count -lt 1) {
+        Add-JsonFail $Name "expected at least one warning in errors"
+        return
+    }
+
+    $warnings = @($json.errors | Where-Object { $_.severity -eq "warning" })
+    if ($warnings.Count -lt 1) {
+        Add-JsonFail $Name "expected severity:warning but none found"
+        return
+    }
+
+    if ($MessageContains) {
+        $found = $false
+        foreach ($w in $warnings) {
+            if ([string]$w.message -like "*$MessageContains*") { $found = $true; break }
+        }
+        if (-not $found) {
+            Add-JsonFail $Name "no warning contained '$MessageContains'"
+            return
+        }
+    }
+
+    Add-JsonPass $Name
 }
 
 function Run-ExpectedFail {
@@ -214,23 +291,23 @@ foreach ($Item in $ExpectedFailures) {
 
 Run-JsonCheck "json good file" "StressTest\CheckJson\good.ixx" $true
 Run-JsonCheck "json syntax error" "StressTest\CheckJson\bad-syntax.ixx" $false "Expected a value"
-Run-JsonCheck "json wrong user arg count" "StressTest\CheckJson\bad-wrong-arg-count.ixx" $false "expects 2"
+Run-JsonCheck "json wrong user arg count" "StressTest\CheckJson\bad-wrong-arg-count.ixx" $false "expects 2 arguments"
 Run-JsonCheck "json unknown function" "StressTest\CheckJson\bad-unknown-function.ixx" $false "missingfunction"
 Run-JsonCheck "json undefined variable" "StressTest\CheckJson\bad-undefined-variable.ixx" $false "ghost"
-Run-JsonCheck "json builtin arity" "StressTest\CheckJson\bad-builtin-arity.ixx" $false "do"
+Run-JsonCheck "json builtin arity" "StressTest\CheckJson\bad-builtin-arity.ixx" $false "expects 1 argument"
 Run-JsonCheck "json invalid color literal" "StressTest\ExpectedFailures\bad-color-name.ixx" $false "Unknown color"
 Run-JsonCheck "json missing read literal" "StressTest\ExpectedFailures\bad-file-read.ixx" $false "File not found"
 Run-JsonCheck "json invalid number literal" "StressTest\ExpectedFailures\bad-number-conversion.ixx" $false "Cannot convert"
 Run-JsonCheck "json empty do literal" "StressTest\ExpectedFailures\bad-do-empty.ixx" $false "empty command"
 Run-JsonCheck "json nontext do literal" "StressTest\ExpectedFailures\bad-do-nontext.ixx" $false "expects a shell command"
 Run-JsonCheck "json good import" "StressTest\CheckJson\good-import.ixx" $true
-Run-JsonCheck "json import missing file" "StressTest\CheckJson\bad-import-missing.ixx" $false "not found"
-Run-JsonCheck "json import cycle" "StressTest\CheckJson\bad-import-cycle.ixx" $false "Circular"
+Run-JsonCheck "json import missing file" "StressTest\CheckJson\bad-import-missing.ixx" $false "Couldn't find"
+Run-JsonCheck "json import cycle" "StressTest\CheckJson\bad-import-cycle.ixx" $false "loop"
 Run-JsonCheck "json import duplicate" "StressTest\CheckJson\bad-import-duplicate.ixx" $false "Duplicate"
 Run-JsonCheck "json import wrong arity" "StressTest\CheckJson\bad-import-wrong-arity.ixx" $false "expects 1"
 Run-JsonCheck "json import nested good" "StressTest\CheckJson\good-import-nested.ixx" $true
 Run-JsonCheck "json import stdlib date good" "StressTest\CheckJson\good-import-stdlib-date.ixx" $true
-Run-JsonCheck "json import long cycle" "StressTest\CheckJson\bad-import-long-cycle.ixx" $false "Circular"
+Run-JsonCheck "json import long cycle" "StressTest\CheckJson\bad-import-long-cycle.ixx" $false "loop"
 Run-JsonCheck "json import transitive duplicate" "StressTest\CheckJson\bad-import-transitive-duplicate.ixx" $false "Duplicate"
 Run-JsonCheck "json import local duplicate nested" "StressTest\CheckJson\bad-import-local-duplicate-nested.ixx" $false "Duplicate"
 Run-JsonCheck "json import stdlib wrong arity" "StressTest\CheckJson\bad-import-stdlib-wrong-arity.ixx" $false "expects 1"
@@ -238,6 +315,21 @@ Run-JsonCheck "json good loop each" "StressTest\CheckJson\good-loop-each.ixx" $t
 Run-JsonCheck "json loop each text literal" "StressTest\CheckJson\bad-loop-each-text-literal.ixx" $false "expects a list"
 Run-JsonCheck "json loop each number literal" "StressTest\CheckJson\bad-loop-each-number-literal.ixx" $false "expects a list"
 Run-JsonCheck "json loop each leak after loop" "StressTest\CheckJson\bad-loop-each-leak-after-loop.ixx" $false "item"
+Run-JsonCheck "json nested function in if" "StressTest\CheckJson\bad-nested-function.ixx" $false "top level"
+Run-JsonCheck "json nested function in try" "StressTest\CheckJson\bad-nested-function-in-try.ixx" $false "top level"
+Run-JsonCheck "json func param leak" "StressTest\CheckJson\bad-func-param-leak.ixx" $false "not defined"
+Run-JsonCheck "json catch error leak" "StressTest\CheckJson\bad-catch-error-leak.ixx" $false "not defined"
+Run-JsonCheck "json top-level return" "StressTest\CheckJson\bad-top-level-return.ixx" $false "return"
+Run-JsonCheck "json top-level return list" "StressTest\CheckJson\bad-top-level-return-list.ixx" $false "return"
+
+# H1: ask() with piped stdin (happy path)
+Run-WithInput "ask returns piped input" "StressTest\ask-input-test.ixx" "Ixxy" "Hello, Ixxy"
+
+# H2: interpolation expression warning
+Run-JsonWarnCheck "json interp expression warn" "StressTest\CheckJson\warn-interpolation-expression.ixx" "will not be interpolated"
+
+# T1: builtin shadow warning
+Run-JsonWarnCheck "json builtin shadow warn" "StressTest\CheckJson\warn-builtin-shadow.ixx" "shadows"
 
 Write-Host ""
 Write-Host "========================================"

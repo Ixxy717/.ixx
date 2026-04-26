@@ -189,9 +189,8 @@ def handle_disk_smart_full(args: list[str]) -> None:
     print(
         "\n  disk smart full requires administrator privileges.\n"
         "\n"
-        "  To enable it:\n"
-        "    1. Right-click your terminal and choose 'Run as administrator'.\n"
-        "    2. Or run:  ixx setup\n"
+        "  To use it:\n"
+        "    Right-click your terminal and choose 'Run as administrator'.\n"
         "\n"
         "  Full SMART attributes (raw read error rate, reallocated sectors,\n"
         "  pending sectors, etc.) will be available in a future release.\n"

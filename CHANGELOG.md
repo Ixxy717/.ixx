@@ -4,6 +4,90 @@ All notable changes to IXX are documented here.
 
 ---
 
+## [0.6.8] — 2026-04-26: Deep Audit Fixes (Letters A–V + Final Docs Batch)
+
+### Crash hardening / raw-exception elimination
+
+- **Write/append to missing folder** — `write` and `append` now catch `OSError` and raise a friendly `IXXRuntimeError` instead of leaking a Python traceback.
+- **`open` shell command** — `subprocess.run` in non-Windows path now catches `FileNotFoundError` gracefully.
+- **Network adapter classifier** — `int(parts[1])` in `_classify_adapter` is now guarded against `ValueError`.
+- **Catch block `error` variable** — `OSError` and `UnicodeDecodeError` now produce readable human messages; Python exception class names no longer appear in `error`.
+- **Unknown statement/expression/operator fallbacks** — Python class names (`Unknown statement type: Assign`) replaced with calm human messages ("This statement cannot be run here.").
+
+### Display consistency / vocabulary cleanup
+
+- **`ixx_err_type()`** — a new display helper returns `"a yes-or-no value (YES/NO)"` for booleans in error messages; `ixx_type_name()` still returns `"bool"` for `type()` compatibility.
+- **All user-facing error messages** — type names in 17 built-in error messages updated to use `ixx_err_type` instead of raw Python class names.
+- **Import error messages** — `"Import file not found"` → `"Couldn't find '…'. Check that the file exists."` and similar plain-English rewrites.
+- **Circular import message** — `"Circular import detected: chain"` → `"These files load each other in a loop, which causes a problem: chain"`.
+- **`ixx check` success** — output changed from `"syntax OK"` to `"check passed"`.
+- **Stub commands** — `"not yet implemented, planned for a future release"` → `"not available yet, coming in a future release"`.
+- **Comparison chaining hint** — `if a less than b less than c` now raises `"Comparisons cannot be chained. Use 'and': if a less than b and b less than c"` instead of a confusing type error.
+- **YES/NO comparison wording** — `"Use 'is' or 'is not' to compare booleans."` → `"Use 'is' or 'is not' to compare yes-or-no values (YES / NO)."`.
+- **Help text** — OVERVIEW examples use forward slashes, admin note no longer mentions `run as admin via native`.
+
+### String escapes (Letter C)
+
+- `\n`, `\t`, `\\` are now processed inside all IXX string literals. Previously they were literal characters.
+- Unknown `\x` sequences pass through as-is (e.g. `\q` → `\q`).
+- Windows paths work as `"C:\\Temp\\file.txt"` or `"C:/Temp/file.txt"`.
+
+### REPL imports and persistence (Letters D, U)
+
+- `use "file.ixx"` now works inside the interactive shell.
+- **REPL state persistence** — variables and functions survive across input lines in the same session. A single `Interpreter` instance is reused per session via `run_repl_input()`.
+- **IXX call-statement recognition** — `write`, `read`, `readlines`, `append`, `exists`, `do`, `ask`, `color` added to `_IXX_STARTERS` so they are correctly parsed as IXX rather than misrouted as unknown shell commands.
+- **Blank continuation line errors** — errors inside multi-line inputs are now surfaced as friendly messages instead of being silently swallowed.
+- **Quoted path casing** — `_normalize` now preserves casing of quoted path tokens on case-sensitive systems.
+- **readline history** — `~/.ixx_history` is loaded on startup and saved on exit via `atexit`.
+
+### Checker scoping and line accuracy (Letters E, V)
+
+- **`error` variable scope** — the checker no longer incorrectly flags `error` as undefined when used outside catch; it now only considers it defined inside a catch body.
+- **Top-level `return` is a static error** — `return` outside a function now correctly produces an error diagnostic.
+- **`StrLit` line metadata** — `StrLit` AST nodes now carry a `line` attribute from the Lark token, enabling accurate interpolation-warning line numbers.
+- **`read`/`readlines` path resolution** — static path checks in the checker now resolve relative paths from the script's directory rather than CWD.
+- **Checker line number correction** — `preprocess_with_map()` returns a line map; `_apply_line_map()` translates preprocessed line numbers back to original source lines in both human and `--json` output.
+
+### Float display and finite-number validation (Letter O)
+
+- Numbers display without trailing `.0` — `10 / 2` → `5` not `5.0`.
+- No excess IEEE 754 precision — `0.1 + 0.2` → `0.3`.
+- `number("inf")` and `number("nan")` now raise a runtime error — these are not valid IXX numbers.
+
+### Keyword interpolation (Letter P)
+
+- `{YES}`, `{NO}`, and `{nothing}` inside string literals now substitute their display value directly, without triggering an "undefined variable" warning.
+
+### Return list literals (Letter Q)
+
+- Functions can return multiple comma-separated values directly: `return 1, 2, 3` produces a list.
+- Grammar, AST transformer, and checker all updated. Existing single-value and bare returns are unchanged.
+- Top-level `return 1, 2, 3` (outside a function) is a static checker error.
+
+### Checker warnings (Letter T)
+
+- **Builtin shadowing** — assigning to a top-level variable whose name matches a built-in (`count`, `text`, `type`, etc.) now produces a checker warning with a rename suggestion.
+
+### StressTest coverage expansion (Letters H, I, N, O, P, Q, T, V)
+
+- 83 positive test files, 50 expected-failure files, 34 CheckJson tests in the normal suite.
+- Hard suite: 104 total pass.
+- Scenario suite: 20 scenario pass, 144 assert pass.
+
+### Documentation overhaul (Final Docs Batch — Letters F, R, S, T docs, + collected notes)
+
+- **`docs/getting-started.md`** — full rewrite covering all current language features, REPL, imports, file I/O, escape sequences, Windows paths, multi-value say, bare conditions, and StressTest suites.
+- **`README.md`** — removed stale "no escape sequences" limitation; updated test section with all three StressTest suites; removed hardcoded test counts.
+- **`spec/language.md`** — new sections: Imports/use, Number display, ixx check (JSON/warnings/builtin-shadow/no-multiline), REPL persistence, `{YES}/{NO}/{nothing}` interpolation, multi-value say, return list literals, file I/O path behavior note.
+- **`spec/dictionary.md`** — new entries: keyword interpolation, return list literal, builtin shadowing, clean float display, `number()` inf/nan rejection, `ask()` EOF behavior, file I/O path resolution, imports section, REPL section, `ixx check --json` entry.
+- **`IXX_ROADMAP_0.6.6_to_0.7.md`** — corrected version label collision: v0.6.7 and v0.6.8 relabeled to their actual content; future features renumbered.
+- **`OVERVIEW.md`** — removed stale `0.3.0-dev` shell version string; updated version history; updated language evolution section.
+- **`spec/shell.md`** — removed stale `v0.3.0` section labels and SSH roadmap version numbers.
+- **`ixx/preprocessor.py`** — updated docstring: known-limitation note now documents the solution (`preprocess_with_map` + `_apply_line_map`).
+
+---
+
 ## [0.6.7] — 2026-04-25: Bug & Edge Case Audit
 
 ### Fixed

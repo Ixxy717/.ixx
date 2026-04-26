@@ -67,7 +67,10 @@ def _classify_adapter(name: str, ip: str) -> str:
     # Only flag as virtual if outside the RFC 1918 range.
     if ip.startswith("172."):
         parts = ip.split(".")
-        second = int(parts[1]) if len(parts) > 1 else 0
+        try:
+            second = int(parts[1]) if len(parts) > 1 else 0
+        except ValueError:
+            return "other"   # malformed IP octet — classify safely
         if 16 <= second <= 31:
             return "other"   # valid RFC 1918 LAN — treat as real
         return "virtual"     # 172.0–172.15 or 172.32+ — likely VM/container

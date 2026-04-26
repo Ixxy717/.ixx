@@ -99,7 +99,7 @@ def resolve_imports(
             )
             if not os.path.isfile(abs_path):
                 raise IXXImportError(
-                    f"Import file not found: {stmt.path}",
+                    f"Couldn't find '{stmt.path}'. Check that the file exists.",
                     line=stmt.line,
                 )
         else:  # "std"
@@ -113,7 +113,7 @@ def resolve_imports(
         if abs_path in _stack:
             chain = " -> ".join(_short(p) for p in _stack) + " -> " + _short(abs_path)
             raise IXXImportError(
-                f"Circular import detected: {chain}",
+                f"These files load each other in a loop, which causes a problem: {chain}",
                 line=stmt.line,
             )
 
@@ -123,7 +123,7 @@ def resolve_imports(
                 source = f.read()
         except OSError as e:
             raise IXXImportError(
-                f"Cannot read import file '{stmt.path}': {e}",
+                f"Couldn't read '{stmt.path}'. Check that the file exists and is readable.",
                 line=stmt.line,
             ) from e
 
@@ -132,7 +132,7 @@ def resolve_imports(
             child_program = parse(source)
         except UnexpectedInput as e:
             raise IXXImportError(
-                f"Syntax error in import '{stmt.path}': {e}",
+                f"There's a syntax error in '{stmt.path}'.",
                 line=stmt.line,
             ) from e
 

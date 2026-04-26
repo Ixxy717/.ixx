@@ -22,7 +22,10 @@ Rules:
 
 Known limitation: stripping blank lines shifts source line numbers, so syntax
 error messages will cite the post-processed line number rather than the
-original.  A source-line map can be added in a future release if needed.
+original.  Use ``preprocess_with_map`` and ``_apply_line_map`` (in
+``ixx/__main__.py``) to translate preprocessed line numbers back to original
+source lines before displaying them to the user.  This is done automatically
+for ``ixx check`` and ``ixx check --json`` output.
 """
 
 from __future__ import annotations
@@ -33,13 +36,34 @@ _DASH_LINE = re.compile(r'^(-+)\s*(.*)', re.DOTALL)
 
 def preprocess(source: str) -> str:
     """Convert dash-prefixed lines to space-indented lines and strip blank lines."""
+    preprocessed, _ = preprocess_with_map(source)
+    return preprocessed
+
+
+def preprocess_with_map(source: str) -> tuple[str, dict[int, int]]:
+    """Preprocess *source* and return ``(preprocessed_source, line_map)``.
+
+    ``line_map`` maps 1-indexed preprocessed line numbers to their
+    corresponding 1-indexed original source line numbers.  Because blank lines
+    are stripped, every preprocessed line number is >= the same original line
+    number, so checker error lines need this map to point back to the editor
+    line the user sees.
+
+    Example::
+
+        original  preprocessed  line_map
+        1  x = 1  →  1  x = 1  {1: 1}
+        2          (blank, stripped)
+        3  say x  →  2  say x  {1: 1, 2: 3}
+    """
     # Strip UTF-8 BOM (EF BB BF / U+FEFF) that some editors prepend to files.
     source = source.lstrip('\ufeff')
     lines = source.split('\n')
-    out = []
-    for line in lines:
+    out: list[str] = []
+    line_map: dict[int, int] = {}  # preprocessed_lineno → original_lineno
+
+    for orig_idx, line in enumerate(lines, start=1):
         # Strip blank / whitespace-only lines before Lark's Indenter sees them.
-        # Blank lines inside blocks would emit a spurious DEDENT token.
         if line.strip() == '':
             continue
         m = _DASH_LINE.match(line)
@@ -49,4 +73,7 @@ def preprocess(source: str) -> str:
             out.append('    ' * depth + content)
         else:
             out.append(line)
-    return '\n'.join(out)
+        # Record which original line this preprocessed line came from.
+        line_map[len(out)] = orig_idx
+
+    return '\n'.join(out), line_map

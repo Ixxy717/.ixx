@@ -73,10 +73,7 @@ say label(items)
 
 say ""
 say "--------------------"
-say "The error below should be RED when colors are enabled."
-say "Change IXX_COLOR / NO_COLOR and re-run to compare."
+say "The intentional error demo has been moved to:"
+say "  examples/errors/color-error-demo.ixx"
+say "Run that file to see the red error output."
 say "--------------------"
-say ""
-
-# Intentional runtime error — tests show_error() color path
-x = number("not-a-number")

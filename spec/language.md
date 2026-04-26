@@ -79,11 +79,34 @@ say "Total: {n}"   # correct
 say "Total: {count(items)}"   # wrong — prints literal "{count(items)}"
 ```
 
+**IXX literal keywords** (`YES`, `NO`, `nothing`) can be used directly inside `{}` — they substitute their display value silently without a variable lookup:
+
+```
+say "Result: {YES}"       # Result: YES
+say "Result: {NO}"        # Result: NO
+say "Value: {nothing}"    # Value: nothing
+```
+
 ### String escape sequences
 
-IXX does **not** process escape sequences inside string literals.  `"\n"` is the two-character sequence `\` + `n`, not a real newline.  Likewise `"\t"` is `\` + `t`.
+IXX processes three escape sequences inside string literals:
 
-To write multi-line files, make separate `write` / `append` calls for each line (each OS write adds a trailing newline).
+| Sequence | Meaning |
+|---|---|
+| `\n` | Real newline |
+| `\t` | Real tab |
+| `\\` | Single backslash |
+
+```
+say "Line 1\nLine 2"       # prints two lines
+say "col1\tcol2"           # tab-separated
+say "C:\\Temp\\file.txt"   # prints C:\Temp\file.txt
+```
+
+All other `\x` sequences (e.g. `\q`) are left as-is.
+
+To write a multi-line file, you can use `\n` inside a string, or make
+separate `write`/`append` calls:
 
 ```
 write "log.txt", "Line 1"
@@ -170,6 +193,24 @@ if score at least 90
 else
 - say "Not A"
 ```
+
+### Bare conditions
+
+A condition can be a single variable — no comparison operator required:
+
+```
+active = YES
+if active
+- say "Account is active"
+
+name = ""
+if not name
+- say "Name is empty"
+```
+
+`YES`, non-zero numbers, non-empty text, and non-empty lists are **true**.
+`NO`, `0`, `""`, `nothing`, and empty lists are **false**.
+(See the [Truthiness](#truthiness) section for the full rules.)
 
 ---
 
@@ -277,6 +318,15 @@ say "Score:", score
 say "Hello, {name}"
 ```
 
+Multiple values are printed space-separated on a single line:
+
+```
+say "Total:", count(items), "items"
+# prints: Total: 3 items
+```
+
+`say` with no arguments prints a blank line.
+
 ---
 
 ## Comparisons
@@ -318,6 +368,14 @@ if tired or bored
 
 if not active
 - say "Account is inactive"
+```
+
+**Short-circuit evaluation:** `and` only evaluates the right side when the left
+is true; `or` only evaluates the right side when the left is false.
+
+```
+if exists("config.txt") and read("config.txt") contains "ready"
+- say "Ready"
 ```
 
 ---
@@ -427,6 +485,21 @@ countdown 5
 > say greet(name, age)         # also expression position — parens required
 > greet name, age              # statement position — no parens
 > ```
+
+### Returning a list literal
+
+A `return` statement can list multiple comma-separated values — they become a list:
+
+```
+function get_sizes
+- return 100, 200, 300
+
+sizes = get_sizes()
+say count(sizes)             # 3
+say first(sizes)             # 100
+```
+
+This is the same comma-separated list syntax used in assignments.
 
 ### Scoping
 
@@ -569,6 +642,11 @@ say type(r)        # nothing
 
 Read and write files using the built-in functions below. Paths are relative to the current working directory unless absolute.
 
+> **Path resolution:** In `ixx check` static analysis, `read()` and `readlines()` paths are
+> resolved relative to the **script's own directory**, not the terminal's current folder. At
+> runtime, the IXX interpreter also resolves relative paths from the script's directory.
+> Absolute paths and forward slashes (`C:/Temp/file.txt`) always work on all platforms.
+
 | Name | Arguments | Returns | Description |
 |------|-----------|---------|-------------|
 | `read(path)` | text | text | Read the full contents of a file as a single string |
@@ -589,7 +667,7 @@ write "data.txt", join(items, ",")          # writes "alpha,beta,gamma"
 back = split(read("data.txt"), ",")         # back is a list of 3 items
 ```
 
-Note: because `"\n"` in IXX strings is a literal backslash + n (not a real newline), you cannot use `"\n"` as a line separator inside a string.  Use `write`/`append` one value per call to create genuinely multi-line files.
+Note: `"\n"` in IXX strings is a real newline (since escape processing was added in v0.6.8).  You can use `write "file.txt", "line1\nline2"` to create a two-line file, or use separate `write`/`append` calls.
 
 `write` and `append` are called as statements with space-separated arguments:
 ```
@@ -684,7 +762,136 @@ function load_config path
 
 ---
 
-## Full example
+## Imports (v0.6.5)
+
+Use the `use` keyword to import functions from another IXX file or from the standard library.
+
+```
+use "helpers.ixx"
+use std "time"
+use std "date"
+```
+
+Rules:
+
+- Only **function definitions** from the imported file are brought in — any top-level statements in the imported file do not run.
+- Functions from the imported file are available by name in the current file.
+- Circular imports are a static error caught by `ixx check`.
+- Import paths are resolved relative to the importing file's directory.
+
+```
+# helpers.ixx
+function greet name
+- say "Hello, {name}!"
+
+# main.ixx
+use "helpers.ixx"
+greet "World"    # Hello, World!
+```
+
+Imports also work in the interactive shell (REPL):
+
+```
+ixx> use "helpers.ixx"
+ixx> greet "Ixxy"
+Hello, Ixxy!
+```
+
+---
+
+## Number display
+
+IXX displays numbers cleanly:
+
+- No trailing `.0` — `10 / 2` displays as `5`, not `5.0`.
+- No excessive IEEE 754 precision — `0.1 + 0.2` displays as `0.3`.
+- Up to 10 significant figures are shown when needed.
+
+```
+say 10 / 2          # 5
+say 0.1 + 0.2       # 0.3
+say 3.14159265358979  # 3.141592654
+```
+
+`number("inf")` and `number("nan")` are runtime errors — these are not valid IXX numbers.
+
+---
+
+## ixx check
+
+`ixx check <file.ixx>` performs a static analysis pass without running the script.
+
+```
+ixx check script.ixx
+```
+
+Success message: `ixx: script.ixx - check passed`
+
+### JSON output
+
+```
+ixx check script.ixx --json
+```
+
+Returns a JSON object:
+
+```
+{"ok": true, "errors": []}
+```
+
+or:
+
+```
+{"ok": false, "errors": [{"line": 5, "col": null, "message": "...", "severity": "error"}]}
+```
+
+Warnings appear with `"severity": "warning"`. A file with only warnings still gets `"ok": true`.
+
+### Things ixx check catches
+
+- Syntax errors (parse failures)
+- Undefined variable references in conservative contexts
+- Wrong number of arguments to user-defined functions
+- Wrong argument types for built-ins (when literal arguments are used)
+- Top-level `return` statements (error — `return` is only valid inside a function)
+- Circular imports
+- Missing import files
+
+### Builtin shadowing warning
+
+Variable names that match built-in names (`count`, `text`, `type`, `number`, `round`, `abs`, `min`, `max`, etc.) trigger a warning at the top level:
+
+```
+count = 5   # warning: 'count' shadows the built-in 'count'. Rename it to avoid confusion.
+```
+
+This is a warning, not an error — the code still runs. The checker reminds you to choose a different name to avoid accidental shadowing.
+
+### No multi-line expressions
+
+IXX expressions must fit on a single line. There is no line-continuation syntax.
+
+---
+
+## REPL / interactive shell
+
+Open the interactive shell with `ixx` or `ixx shell`.
+
+- **Variables and functions persist** for the duration of the session. You can define a variable on one line and use it on the next.
+- **Imports work** — `use "file.ixx"` inside the REPL loads functions for the rest of the session.
+- **Command history** is saved to `~/.ixx_history` on systems that support readline.
+- **Quoted path casing is preserved** — paths given in quoted strings keep their original capitalisation when passed to shell commands.
+
+```
+ixx> name = "Ixxy"
+ixx> say "Hello, {name}"
+Hello, Ixxy
+ixx> count = 3
+ixx> say count
+3
+```
+
+---
 
 ```
 name = "Ixxy"

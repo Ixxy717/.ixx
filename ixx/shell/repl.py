@@ -41,23 +41,58 @@ from .._version import VERSION
 # Readline / history (best-effort; silently skipped if unavailable)
 # ---------------------------------------------------------------------------
 
+_HISTORY_FILE: str = str(__import__("pathlib").Path.home() / ".ixx_history")
+_HISTORY_LENGTH: int = 500
+
+
 def _setup_readline() -> None:
+    """Configure readline tab-completion and persistent history.
+
+    Loads ~/.ixx_history on startup and registers an atexit hook to save it.
+    Silently skipped on systems where neither readline nor pyreadline3 is
+    available (e.g. plain Windows without pyreadline3 installed).
+    """
     try:
-        import readline  # noqa: F401  (Unix)
+        import readline
+        import atexit
+        import os as _os
+        readline.set_history_length(_HISTORY_LENGTH)
+        if _os.path.exists(_HISTORY_FILE):
+            try:
+                readline.read_history_file(_HISTORY_FILE)
+            except Exception:
+                pass
+        atexit.register(_safe_write_history)
     except ImportError:
         try:
-            import pyreadline3  # noqa: F401  (Windows)
+            import pyreadline3  # noqa: F401  (Windows fallback)
         except ImportError:
-            pass  # History just won't work; that's fine
+            pass  # History unavailable; that's fine
+    except Exception:
+        pass  # Never block the REPL for history issues
+
+
+def _safe_write_history() -> None:
+    """Write readline history to disk; silently ignores all errors."""
+    try:
+        import readline
+        readline.write_history_file(_HISTORY_FILE)
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
 # Tokeniser
 # ---------------------------------------------------------------------------
 
-def _tokenize(line: str) -> list[str]:
-    """Split on whitespace, preserving quoted strings as single tokens."""
-    tokens: list[str] = []
+def _tokenize_raw(line: str) -> list[tuple[str, bool]]:
+    """Split *line* on whitespace, preserving quoted strings as single tokens.
+
+    Returns a list of ``(token, was_quoted)`` pairs.  Quoted tokens retain
+    their original casing so file paths on case-sensitive systems are not
+    corrupted by ``_normalize``.
+    """
+    tokens: list[tuple[str, bool]] = []
     current: list[str] = []
     in_quote = False
     quote_char = ""
@@ -66,7 +101,7 @@ def _tokenize(line: str) -> list[str]:
         if in_quote:
             if ch == quote_char:
                 in_quote = False
-                tokens.append("".join(current))
+                tokens.append(("".join(current), True))
                 current = []
             else:
                 current.append(ch)
@@ -75,27 +110,35 @@ def _tokenize(line: str) -> list[str]:
             quote_char = ch
         elif ch in (" ", "\t"):
             if current:
-                tokens.append("".join(current))
+                tokens.append(("".join(current), False))
                 current = []
         else:
             current.append(ch)
 
     if current:
-        tokens.append("".join(current))
+        tokens.append(("".join(current), False))
 
     return tokens
 
 
-def _normalize(tokens: list[str]) -> list[str]:
-    """Lowercase all tokens so commands are case-insensitive.
+def _tokenize(line: str) -> list[str]:
+    """Public tokeniser — returns a flat list of string tokens.
 
-    Quoted path arguments (free-form strings the user typed) must preserve
-    their case, but command keywords are always lowercase in the registry.
-    We lowercase everything — path resolution handles case sensitivity at the
-    OS level, and quoted strings that reach handlers are reconstructed from
-    the original line anyway.
+    Quoted strings are preserved as single tokens (without their surrounding
+    quotes), and unquoted tokens are returned as-is.  Callers that need to
+    distinguish quoted from unquoted tokens should use ``_tokenize_raw``.
     """
-    return [t.lower() for t in tokens]
+    return [tok for tok, _ in _tokenize_raw(line)]
+
+
+def _normalize(raw_tokens: list[tuple[str, bool]]) -> list[str]:
+    """Lowercase command (unquoted) tokens; preserve casing of quoted strings.
+
+    Command keywords are always lowercase in the registry.  Quoted string
+    arguments (e.g. file paths passed to ``open``/``copy``/``move``) must
+    retain their original casing for case-sensitive file systems (Linux/macOS).
+    """
+    return [tok if was_quoted else tok.lower() for tok, was_quoted in raw_tokens]
 
 
 # ---------------------------------------------------------------------------
@@ -136,27 +179,52 @@ def _handle_help(registry: CommandRegistry, tokens: list[str]) -> None:
     show_help(registry, topic)
 
 
-def _try_run_ixx(first_line: str, prompt_fn) -> bool:
+def _try_run_ixx(first_line: str, prompt_fn, interpreter=None) -> bool:
     """
     Attempt to parse and run *first_line* (and any continuation lines) as IXX.
+
+    If *interpreter* is provided it is reused (persistent REPL session state).
+    Otherwise a fresh Interpreter is created (one-shot fallback).
+
     Returns True if the input was recognised as IXX (even if it errored).
-    Returns False if it definitely is not IXX (so the caller can show "unknown command").
+    Returns False if it definitely is not IXX (so caller can show "unknown command").
     """
+    import os
     from ..parser import parse
     from ..interpreter import Interpreter, IXXRuntimeError
     from ..preprocessor import preprocess
+    from ..modules import resolve_imports, IXXImportError
     from lark.exceptions import UnexpectedInput, UnexpectedEOF
+
+    # Builtin call-statement names that are also valid IXX statement starters.
+    # Without this set they would fall through to "unknown shell command".
+    _IXX_STARTERS = {
+        "say", "if", "else", "loop", "not",
+        "function", "try", "use", "return", "catch",
+        # builtin call statements (U2)
+        "write", "read", "readlines", "append", "exists",
+        "do", "ask", "color",
+    }
+
+    def _run_program(program) -> None:
+        imported = resolve_imports(program, os.getcwd())
+        if interpreter is not None:
+            interpreter.run_repl_input(program, imported)
+        else:
+            Interpreter().run(program, imported)
 
     lines = [first_line]
 
-    # Try parsing with increasing number of lines (continuation loop)
     while True:
         source = "\n".join(lines)
         try:
             program = parse(source)
-            # Parsed OK — run it
             try:
-                Interpreter().run(program)
+                _run_program(program)
+            except IXXImportError as e:
+                from .renderer import _c, _RED, _ANSI
+                label = _c(_RED, "Import error") if _ANSI else "Import error"
+                print(f"\n  {label}: {e}\n")
             except IXXRuntimeError as e:
                 from .renderer import _c, _RED, _ANSI
                 label = _c(_RED, "Error") if _ANSI else "Error"
@@ -170,28 +238,27 @@ def _try_run_ixx(first_line: str, prompt_fn) -> bool:
                 print()
                 return True
             if cont.strip() == "":
-                # Blank line — give up continuing, try to run what we have
+                # Blank continuation — attempt to run what we have; show
+                # a friendly message on failure instead of swallowing it.
                 try:
                     program = parse(source)
-                    Interpreter().run(program)
+                    _run_program(program)
+                except IXXRuntimeError as e:
+                    from .renderer import _c, _RED, _ANSI
+                    label = _c(_RED, "Error") if _ANSI else "Error"
+                    print(f"\n  {label}: {e}\n")
                 except Exception:
-                    pass
+                    print("  ixx: syntax error — check your code")
                 return True
             lines.append(cont)
         except UnexpectedInput:
-            # Definite parse error — but only report it as IXX if the first
-            # token looks like IXX syntax, not a shell command typo.
-            ixx_starters = {
-                "say", "if", "else", "loop", "not",
-                "function", "try", "use", "return", "catch",
-            }
+            # Definite parse error — report as IXX only when the first token
+            # looks like IXX syntax, not a shell command typo.
             first_token = first_line.strip().split()[0].lower() if first_line.strip() else ""
             is_assignment = "=" in first_line and not first_line.strip().startswith("#")
-            if first_token in ixx_starters or is_assignment:
-                # Looks like IXX — report the error
-                print(f"  ixx: syntax error — check your code")
+            if first_token in _IXX_STARTERS or is_assignment:
+                print("  ixx: syntax error — check your code")
                 return True
-            # Looks like a mistyped shell command
             return False
         except Exception as e:
             print(f"  ixx: error: {e}")
@@ -199,13 +266,13 @@ def _try_run_ixx(first_line: str, prompt_fn) -> bool:
 
 
 def _dispatch(registry: CommandRegistry, tokens: list[str],
-               raw_line: str = "", prompt_fn=None) -> None:
+               raw_line: str = "", prompt_fn=None, interpreter=None) -> None:
     """Core dispatch logic shared by run() and run_command_once()."""
     result = get_guidance(registry, tokens)
 
     if result.matched_node is None:
         # Try running the raw input as IXX before giving up
-        if raw_line and prompt_fn and _try_run_ixx(raw_line, prompt_fn):
+        if raw_line and prompt_fn and _try_run_ixx(raw_line, prompt_fn, interpreter):
             return
         suggestions = registry.suggest(tokens[0])
         show_unknown(tokens[0], suggestions)
@@ -273,6 +340,10 @@ def run() -> None:
     from ..update_check import notify as _uc_notify
     _uc_notify(VERSION, indent="")
 
+    # One persistent interpreter for the entire session (U1).
+    from ..interpreter import Interpreter as _Interpreter
+    _session_interp = _Interpreter()
+
     while True:
         try:
             raw = input(PROMPT)
@@ -285,7 +356,7 @@ def run() -> None:
         if not line:
             continue
 
-        tokens = apply_aliases(_normalize(_tokenize(line)))
+        tokens = apply_aliases(_normalize(_tokenize_raw(line)))
         first = tokens[0]
 
         # ---- exit / quit ----
@@ -312,7 +383,8 @@ def run() -> None:
             _handle_help(registry, tokens)
             continue
 
-        _dispatch(registry, tokens, raw_line=line, prompt_fn=input)
+        _dispatch(registry, tokens, raw_line=line, prompt_fn=input,
+                  interpreter=_session_interp)
 # ---------------------------------------------------------------------------
 
 def run_command_once(line: str) -> None:
@@ -322,7 +394,7 @@ def run_command_once(line: str) -> None:
     """
     _utf8_stdout()
     registry = _make_registry()
-    tokens = apply_aliases(_normalize(_tokenize(line.strip())))
+    tokens = apply_aliases(_normalize(_tokenize_raw(line.strip())))
     if not tokens:
         return
 
@@ -347,7 +419,7 @@ def run_command_capture(line: str) -> str:
     from ..runtime.errors import IXXRuntimeError
 
     registry = _make_registry()
-    tokens = apply_aliases(_normalize(_tokenize(line.strip())))
+    tokens = apply_aliases(_normalize(_tokenize_raw(line.strip())))
 
     if not tokens:
         raise IXXRuntimeError("do() received an empty command.")

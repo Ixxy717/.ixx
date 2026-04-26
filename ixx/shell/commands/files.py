@@ -80,13 +80,20 @@ def handle_open(args: list[str]) -> None:
         os.startfile(str(path))  # type: ignore[attr-defined]
         print(f"\n  Opened: {path}\n")
     except AttributeError:
-        # Non-Windows fallback
+        # Non-Windows fallback — wrap subprocess in its own guard so
+        # FileNotFoundError (xdg-open/open not installed) stays friendly.
         import subprocess
-        if sys.platform == "darwin":
-            subprocess.run(["open", str(path)])
-        else:
-            subprocess.run(["xdg-open", str(path)])
-        print(f"\n  Opened: {path}\n")
+        try:
+            if sys.platform == "darwin":
+                subprocess.run(["open", str(path)], check=False)
+            else:
+                subprocess.run(["xdg-open", str(path)], check=False)
+            print(f"\n  Opened: {path}\n")
+        except FileNotFoundError:
+            print(f"\n  Could not open: {path}")
+            print("  No application found to open this type of file.\n")
+        except Exception as e:
+            print(f"\n  Could not open: {path}\n  {e}\n")
     except Exception as e:
         print(f"\n  Could not open: {path}\n  {e}\n")
 

@@ -7,6 +7,7 @@ the parent method runs.
 """
 
 from __future__ import annotations
+import re
 from lark import Transformer
 from .ast_nodes import (
     Program, Assign, If, Loop, LoopEach, Say,
@@ -14,6 +15,18 @@ from .ast_nodes import (
     NegOp, BinOp, Compare, AndOp, OrOp, NotOp,
     CallExpr, CallStmt, ReturnStmt, FuncDef, TryCatch, UseStmt,
 )
+
+# ── string escape processing ──────────────────────────────────────────────────
+
+_ESCAPE_RE = re.compile(r'\\([\\nt])')
+_ESCAPE_MAP = {'\\': '\\', 'n': '\n', 't': '\t'}
+
+def _process_escapes(s: str) -> str:
+    """Translate \\, \n, \t escape sequences in an IXX string literal.
+
+    Unknown escapes (e.g. \\r, \\x) are left as-is (backslash + char).
+    """
+    return _ESCAPE_RE.sub(lambda m: _ESCAPE_MAP[m.group(1)], s)
 
 
 class IXXTransformer(Transformer):
@@ -61,7 +74,9 @@ class IXXTransformer(Transformer):
         return CallStmt(name=name, args=args, line=line)
 
     def return_stmt(self, items):
-        value = items[0] if items else None
+        if not items:
+            return ReturnStmt(value=None)
+        value = ListLit(items=list(items)) if len(items) > 1 else items[0]
         return ReturnStmt(value=value)
 
     def func_def(self, items):
@@ -120,7 +135,9 @@ class IXXTransformer(Transformer):
 
     def str_lit(self, items):
         raw = str(items[0])
-        return StrLit(value=raw[1:-1])      # strip surrounding quotes
+        inner = raw[1:-1]           # strip surrounding quotes
+        line = getattr(items[0], "line", None)
+        return StrLit(value=_process_escapes(inner), line=line)
 
     def yes_lit(self, _):
         return BoolLit(value=True)

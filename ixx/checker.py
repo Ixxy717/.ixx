@@ -66,6 +66,11 @@ _BUILTIN_ARITY: dict[str, tuple[int, int | None]] = {
 
 _ALL_BUILTINS: frozenset[str] = frozenset(_BUILTIN_ARITY)
 
+
+def _nargs(n: int) -> str:
+    """Return a pluralised argument count: '1 argument', '2 arguments'."""
+    return f"{n} argument" if n == 1 else f"{n} arguments"
+
 # Valid IXX color names (must stay in sync with runtime/builtins/color.py)
 _VALID_COLORS: frozenset[str] = frozenset(
     {"red", "green", "yellow", "cyan", "bold", "dim"}
@@ -164,10 +169,9 @@ class SemanticChecker:
             if isinstance(stmt, Assign):
                 self._all_assigned.add(stmt.name)
             elif isinstance(stmt, FuncDef):
+                # Only the function name itself is visible at top level;
+                # params and body-locals are scoped to the function.
                 self._all_assigned.add(stmt.name)
-                for p in stmt.params:
-                    self._all_assigned.add(p)
-                self._collect_names(stmt.body)
             elif isinstance(stmt, If):
                 self._collect_names(stmt.then_body)
                 self._collect_names(stmt.else_body)
@@ -180,7 +184,7 @@ class SemanticChecker:
             elif isinstance(stmt, TryCatch):
                 self._collect_names(stmt.try_body)
                 if stmt.catch_body:
-                    self._all_assigned.add("error")
+                    # Do NOT add "error" globally — it only exists inside the catch body.
                     self._collect_names(stmt.catch_body)
             # UseStmt: no names to collect
 
@@ -223,6 +227,15 @@ class SemanticChecker:
         for stmt in stmts:
             if isinstance(stmt, Assign):
                 self._check_expr(stmt.value, in_function)
+                # T1: warn when an assignment shadows a known built-in name.
+                # Only fire at true top level (not inside function bodies) to keep
+                # the check conservative and avoid noisy local-variable warnings.
+                if not in_function and stmt.name in _ALL_BUILTINS:
+                    self._warn(
+                        getattr(stmt, "line", None), None,
+                        f"'{stmt.name}' shadows the built-in '{stmt.name}'. "
+                        "Rename it to avoid confusion.",
+                    )
             elif isinstance(stmt, Say):
                 for arg in stmt.args:
                     self._check_expr(arg, in_function)
@@ -257,16 +270,34 @@ class SemanticChecker:
                 if not was_predeclared:
                     self._all_assigned.discard(stmt.var_name)
             elif isinstance(stmt, FuncDef):
-                self._literal_depth += 1
-                self._check_stmts(stmt.body, in_function=True)
-                self._literal_depth -= 1
+                if self._literal_depth > 0 or in_function:
+                    self._err(
+                        stmt.line, None,
+                        "Function definitions must be at the top level, "
+                        "not inside if/loop/try/other functions."
+                    )
+                else:
+                    # Top-level function: check its body for errors.
+                    self._literal_depth += 1
+                    self._check_stmts(stmt.body, in_function=True)
+                    self._literal_depth -= 1
             elif isinstance(stmt, ReturnStmt):
+                if not in_function:
+                    self._err(
+                        None, None,
+                        "'return' can only be used inside a function."
+                    )
                 if stmt.value is not None:
                     self._check_expr(stmt.value, in_function)
             elif isinstance(stmt, TryCatch):
                 self._literal_depth += 1
                 self._check_stmts(stmt.try_body, in_function)
+                # "error" is only defined inside the catch body.
+                error_was_pre = "error" in self._all_assigned
+                self._all_assigned.add("error")
                 self._check_stmts(stmt.catch_body, in_function)
+                if not error_was_pre:
+                    self._all_assigned.discard("error")
                 self._literal_depth -= 1
             # UseStmt: nothing to check here (resolved before check() is called)
 
@@ -292,7 +323,7 @@ class SemanticChecker:
                         "only bare variable names like {name} are supported."
                     )
         elif isinstance(expr, VarRef):
-            if not in_function:
+            if not in_function and self._literal_depth == 0:
                 name = expr.name
                 if (
                     name not in self._all_assigned
@@ -341,7 +372,7 @@ class SemanticChecker:
                 )
                 self._err(
                     line, None,
-                    f"'{name}' expects {expected} argument(s), got {n}{param_hint}"
+                    f"'{name}' expects {_nargs(expected)}, got {n}{param_hint}"
                 )
             return
 
@@ -350,14 +381,14 @@ class SemanticChecker:
             lo, hi = _BUILTIN_ARITY[name]
             if n < lo or (hi is not None and n > hi):
                 if hi is None:
-                    expected_str = f"at least {lo}"
+                    expected_str = f"at least {_nargs(lo)}"
                 elif lo == hi:
-                    expected_str = str(lo)
+                    expected_str = _nargs(lo)
                 else:
-                    expected_str = f"{lo}-{hi}"
+                    expected_str = f"{lo}\u2013{hi} arguments"
                 self._err(
                     line, None,
-                    f"'{name}' expects {expected_str} argument(s), got {n}"
+                    f"'{name}' expects {expected_str}, got {_nargs(n)}"
                 )
             else:
                 # Arity OK — run conservative literal-value checks (top level only).
@@ -399,12 +430,17 @@ class SemanticChecker:
 
         elif name in ("read", "readlines"):
             s = _lit_str(arg0)
-            if (
-                s is not None
-                and s not in self._written_paths
-                and not os.path.exists(s)
-            ):
-                self._err(line, None, f"File not found: {s}")
+            if s is not None and s not in self._written_paths:
+                # Resolve the literal path relative to the script's own directory
+                # (not the process CWD) so `ixx check subdir/script.ixx` works
+                # when data files live next to the script.
+                if os.path.isabs(s):
+                    resolved = s
+                else:
+                    script_dir = os.path.dirname(os.path.abspath(self._file))
+                    resolved = os.path.join(script_dir, s)
+                if not os.path.exists(resolved):
+                    self._err(line, None, f"File not found: {s}")
 
         elif name in ("first", "last", "sort", "reverse"):
             t = _lit_type_name(arg0)
